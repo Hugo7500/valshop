@@ -1,0 +1,41 @@
+{
+  "color" : "rgba(143, 168, 149,1)",
+  "localizedNames" : {
+    "en" : "",
+    "ja" : "",
+    "es" : "",
+    "ru" : "",
+    "pt" : "",
+    "de" : "",
+    "it" : "",
+    "fr" : "",
+    "zh" : ""
+  },
+  "name" : "valshop-s0",
+  "icon" : "gamecontroller.fill",
+  "iconImage" : null,
+  "entry" : "index.tsx",
+  "author" : null,
+  "contributors" : [
+
+  ],
+  "version" : "1.0.0",
+  "runInApp" : false,
+  "permissions" : null,
+  "intentInputTypes" : [
+
+  ],
+  "description" : null,
+  "localizedDescriptions" : {
+    "en" : "",
+    "ja" : "",
+    "es" : "",
+    "ru" : "",
+    "pt" : "",
+    "de" : "",
+    "it" : "",
+    "fr" : "",
+    "zh" : ""
+  },
+  "remoteResource" : null
+}
