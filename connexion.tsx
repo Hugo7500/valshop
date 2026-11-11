@@ -11,6 +11,32 @@ import type { ChoixVue } from "./vue"
 // « connexion » à index.tsx, qui fait alors une seule tentative de login (`refresh(true)`,
 // garde-fou et verrou compris), hors de l'app, puis la rouvre.
 
+/** La phrase de l'Écran de connexion et de l'invitation de l'onglet Boutique. */
+const PHRASE = "Connecte-toi à ton compte Riot"
+
+/**
+ * Epic-installation-ami, entrée 11 : l'onglet Boutique quand aucune boutique n'est gardée ni aucune session Riot au
+ * trousseau (jamais connecté, ou déconnecté) : la phrase et le Bouton principal de l'Écran de connexion, sous l'En-tête et la
+ * Barre d'onglets de l'app. « Me connecter » ferme l'app en rendant « connexion » à index.tsx, comme l'Écran de connexion :
+ * une seule tentative de login, hors de l'app, puis l'app de nouveau. Aucune requête, aucune lecture.
+ */
+export function InviteConnexion({ palette }: { palette: Palette }) {
+  const fermer: (choix?: ChoixVue) => void = Navigation.useDismiss()
+  return (
+    <VStack
+      alignment="leading"
+      spacing={ESPACES.entreBlocs}
+      frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
+      padding={{ top: ESPACES.entete, horizontal: ESPACES.margePage, bottom: ESPACES.basPage }}
+    >
+      <Text {...TYPO.corps} foregroundStyle={palette.texteDoux}>
+        {PHRASE}
+      </Text>
+      <BoutonPrincipal libelle="Me connecter" action={() => fermer("connexion")} />
+    </VStack>
+  )
+}
+
 /**
  * L'écran, sur le fond de l'app. En-tête ValShop à 20 du haut et 16 des côtés, puis à 12 la
  * phrase en `corps` `texte-doux`, et à 14 le Bouton principal, pleine largeur : VoiceOver
@@ -38,7 +64,7 @@ export function EcranConnexion({ defile, palette }: { defile: boolean; palette: 
             padding={{ top: ESPACES.entete, horizontal: ESPACES.margePage, bottom: ESPACES.basPage }}
           >
             <Text {...TYPO.corps} foregroundStyle={palette.texteDoux}>
-              Connecte-toi à ton compte Riot
+              {PHRASE}
             </Text>
             <BoutonPrincipal libelle="Me connecter" action={() => fermer("connexion")} />
           </VStack>

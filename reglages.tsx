@@ -41,7 +41,7 @@ import { ETAT_PRIX_FILE } from "./valshop"
 // répondre (`historique` null sinon, historiqueAvantMontre) : un nouvel utilisateur, qui ne peut pas fabriquer ce fichier,
 // n'en lit rien ; l'état se lit toujours à l'ouverture de la feuille, section cachée ou non. Après Collecte,
 // Prix du catalogue (ticket 8.9 de epic-boutique-visuels : skins à prix par source et dernier contrôle HenrikDev, lus une fois
-// dans etat-prix.json à l'ouverture), puis Partager ValShop (epic-installation-ami, entrée 3) : le seul lien d'installation passé à la
+// dans etat-prix.json à l'ouverture ; entrée 15 : un contrôle non lu n'y est pas montré, sauf une clé refusée), puis Partager ValShop (epic-installation-ami, entrée 3) : le seul lien d'installation passé à la
 // feuille de partage d'iOS (partage.ts), sans requête ni fichier. Sous le titre, Nouvelle version
 // (entrée 4), seulement quand une version plus récente est sue (mise-a-jour.ts) : ajoutée à
 // l'arbre, jamais montrée par un modificateur changé après coup. En dernier, À propos (entrée 7) :
@@ -347,8 +347,8 @@ function SectionCollecte({ c, grand, meta, parties, maintenant }: {
 
 /**
  * Ticket 8.9 de epic-boutique-visuels : section Prix du catalogue : son étiquette, annoncée comme en-tête ; le nombre de skins
- * à prix sur le total et par source (boutique, retenus, HenrikDev, référence), puis le dernier contrôle HenrikDev en clair
- * (prix-retenus.ts, lignesPrixCatalogue), tirés de etat-prix.json, que la lecture de la boutique écrit ; lu une fois, à
+ * à prix sur le total et par source (boutique, retenus, HenrikDev, référence), puis le dernier contrôle HenrikDev en clair,
+ * s'il a eu lieu ou si la clé est refusée (prix-retenus.ts, lignesPrixCatalogue), tirés de etat-prix.json, que la lecture de la boutique écrit ; lu une fois, à
  * l'ouverture de la feuille (absent ou illisible : « Après la prochaine lecture de la boutique. »). Sans le journal ; ni
  * requête, ni écriture.
  */

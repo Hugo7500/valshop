@@ -423,12 +423,19 @@ export function phraseHenrik(h: EtatPrix["henrikdev"]): string {
   }
 }
 
+/** Entrée 15 de epic-boutique-visuels : un contrôle « non lu » qui n'appelle aucune action (tout, sauf une clé refusée). */
+function controleTu(i: IssueHenrik): boolean {
+  return i.genre === "non-lu" && !i.raison.startsWith("clé refusée")
+}
+
 /** Le texte d'attente des Réglages, avant le premier état écrit. */
 export const PRIX_APRES_LECTURE = "Après la prochaine lecture de la boutique."
 
 /**
  * Les lignes de la section « Prix du catalogue » : les skins à prix sur le total, puis par source, puis le contrôle HenrikDev ;
- * sans état : PRIX_APRES_LECTURE.
+ * sans état : PRIX_APRES_LECTURE. Entrée 15 de epic-boutique-visuels : un contrôle qui n'a pas eu lieu (« non lu » : route en
+ * erreur, clé absente, limite, collecte en cours) n'appelle aucune action et ressemblait à une panne : aucune ligne pour lui
+ * (le journal dit toujours pourquoi : « Prix HenrikDev non lus… »). Sauf une clé refusée, qui en appelle une : elle se dit.
  */
 export function lignesPrixCatalogue(e: EtatPrix | null): string[] {
   if (e === null) return [PRIX_APRES_LECTURE]
@@ -441,7 +448,7 @@ export function lignesPrixCatalogue(e: EtatPrix | null): string[] {
     `${avecPrix} ${avecPrix > 1 ? "skins ont" : "skin a"} un prix sur ${c.total}${origine}${quand !== null ? ` (lecture du ${quand})` : ""}.`,
     `Boutique : ${c.boutique} · Retenus : ${c.retenus} · HenrikDev : ${c.henrikdev} · Référence : ${c.reference}`
       + (c.origine !== undefined ? ` · Avec origine : ${c.origine}` : ""),
-    phraseHenrik(e.henrikdev),
+    ...(e.henrikdev !== null && controleTu(e.henrikdev.issue) ? [] : [phraseHenrik(e.henrikdev)]),
   ]
 }
 

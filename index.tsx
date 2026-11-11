@@ -1,5 +1,5 @@
 import { Script } from "scripting"
-import { changerDeCompte, finirLectures, nettoyerCookiesPersistants, refresh, tailJournal } from "./valshop"
+import { changerDeCompte, finirLectures, nettoyerCookiesPersistants, refresh, seDeconnecter, tailJournal } from "./valshop"
 import { INTERRUPTEURS, lireOuverture, presenterApp, type LectureOuverture } from "./app"
 import { aUneCle } from "./cle"
 import type { ChoixVue } from "./vue"
@@ -25,7 +25,8 @@ async function run() {
   // le changement se fait, l'app fermée, puis la lecture du nouveau compte, et fin), ou par
   // « Me connecter » (Écran de connexion, ou étape 1 du Premier lancement) : une seule mise
   // à jour, donc une seule tentative de login, puis l'app de nouveau ; jamais de nouvel essai
-  // sans un nouvel appui. Sans paramètre, ou inconnu : l'app, comme `vue` (entrée 21 de
+  // sans un nouvel appui ; ou par « Se déconnecter » (Boutique, après confirmation) : la session
+  // Riot est retirée, l'app fermée, puis l'app de nouveau, qui invite à se connecter. Sans paramètre, ou inconnu : l'app, comme `vue` (entrée 21 de
   // epic-stats-collecte : ce lancement ne fait plus la mise à jour au premier plan pour finir
   // sans rien montrer ; sauf sans boutique gardée, une clé rangée : la mise à jour d'abord,
   // entrée 22, plus bas) ; session expirée, l'Écran de connexion et son « Me connecter », jamais
@@ -51,7 +52,9 @@ async function run() {
   // pour la lire. Session dite expirée : l'Écran de connexion, comme avec une boutique. Sans clé : rien de tout cela (Premier
   // lancement).
   const lue = liste ? lireOuverture() : undefined
-  const sansBoutique = lue !== undefined && lue.shop === null && !lue.expiree
+  // Epic-installation-ami, entrée 11 : sans session au trousseau non plus (jamais connecté, ou déconnecté), pas de mise à
+  // jour d'abord : elle ouvrirait la fenêtre de login d'office ; l'onglet Boutique de l'app invite à se connecter.
+  const sansBoutique = lue !== undefined && lue.shop === null && !lue.expiree && !lue.deconnecte
   const app = async (deja?: LectureOuverture): Promise<ChoixVue> => {
     const c = await presenterApp(deja)
     await finirLectures()
@@ -64,8 +67,11 @@ async function run() {
     }
     choix = await app(sansBoutique ? undefined : lue)
   }
-  while (choix === "connexion") {
-    await refresh(true)
+  // « Me connecter » : la mise à jour, donc le login, puis l'app ; « Se déconnecter » (epic-installation-ami, entrée 11) :
+  // la déconnexion, puis l'app, qui invite à se connecter.
+  while (choix === "connexion" || choix === "deconnexion") {
+    if (choix === "connexion") await refresh(true)
+    else await seDeconnecter()
     choix = await app()
   }
   if (choix === "changer-de-compte") await changerDeCompte()

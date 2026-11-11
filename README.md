@@ -67,14 +67,15 @@ Rien n'est envoyé à la personne qui t'a donné le lien. Le bouton **Envoyer le
 
 - **N'installe pas de scripts douteux dans Scripting.** Les scripts de Scripting partagent le même environnement sur ton iPhone : un script malveillant installé à côté de ValShop pourrait lire ses fichiers (tes stats, ta boutique, ton identifiant de joueur) et même, en se faisant passer pour ValShop, lire ta session Riot et ta clé. N'installe que des scripts dont tu connais l'auteur.
 - **Révoquer ta clé HenrikDev.** Sur le tableau de bord de HenrikDev (<https://api.henrikdev.xyz/dashboard/>), menu **API Keys** : supprime la clé, puis crée-en une nouvelle si tu veux continuer. Dans ValShop, **Retirer la clé** (réglages des stats) l'efface de ton iPhone.
-- **Te déconnecter de Riot.** Supprimer ValShop de Scripting efface sa session et ta clé, rangées avec le script. Tes stats, ta boutique et le journal restent dans le dossier commun de Scripting, où d'autres scripts peuvent les lire. Pour fermer aussi la session chez Riot, change ton mot de passe sur le site de Riot.
+- **Te déconnecter de Riot.** Dans l'onglet **Boutique**, tout en bas, touche **Se déconnecter** : ValShop efface ta session Riot de ton iPhone, avec la boutique qu'il gardait. Ton historique de parties, ta liste de souhaits et ta clé HenrikDev restent (pour la clé : **Retirer la clé**, dans les réglages des stats). Pour fermer aussi la session chez Riot, change ton mot de passe sur le site de Riot.
+- **Supprimer ValShop ne te déconnecte pas forcément.** Ta session Riot et ta clé HenrikDev sont rangées dans le trousseau de ton iPhone, qui peut les garder après la suppression de ValShop, et même de l'app Scripting : une réinstallation les retrouverait. Avant de supprimer, touche **Se déconnecter** et **Retirer la clé**. Tes stats et le journal restent dans le dossier commun de Scripting, où d'autres scripts peuvent les lire.
 - **Mettre à jour, c'est faire confiance à l'auteur de ce dépôt.** Chaque nouvelle version installe le code publié ici, tel que son auteur l'a écrit. Ne mets à jour que depuis ce dépôt, par le bouton **Mettre à jour ValShop** ou ton lien d'installation.
 
 ## Mettre à jour
 
 Quand une nouvelle version est publiée, la section **Nouvelle version** apparaît dans les réglages des stats (l'engrenage de l'onglet **Stats**), avec ce qui change. Touche **Mettre à jour ValShop** : Scripting importe la nouvelle version depuis ce dépôt. Tu peux aussi toucher de nouveau ton lien d'installation.
 
-- **Ne supprime pas l'ancien ValShop avant** : dans Scripting, ta clé HenrikDev et ta session Riot sont rangées avec le script et partiraient avec lui.
+- **Ne supprime pas l'ancien ValShop avant** : ta clé HenrikDev et ta session Riot sont rattachées à ce script, et tu pourrais avoir à les redonner.
 - Si Scripting te demande quoi faire du script déjà installé, choisis de le remplacer.
 - Ton historique de parties, ta liste de souhaits et ta boutique sont rangés à part du code : la mise à jour ne les touche pas.
 

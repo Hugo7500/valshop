@@ -616,11 +616,19 @@ function EditeurSouhaits({ initiale, onChange }: { initiale: Souhait[]; onChange
 }
 
 /**
- * Choix que l'app rend au script (index.tsx) en se fermant : « changer-de-compte », fait dans
- * Boutique ; « connexion », fait sur l'Écran de connexion (connexion.tsx) ; null : fermée
- * par le Bouton Fermer, rien à faire.
+ * Choix que l'app rend au script (index.tsx) en se fermant : « changer-de-compte » et « deconnexion »
+ * (epic-installation-ami, entrée 11), faits dans Boutique ; « connexion », fait sur l'Écran de connexion
+ * ou l'invitation de l'onglet Boutique (connexion.tsx) ; null : fermée par le Bouton Fermer, rien à faire.
  */
-export type ChoixVue = "changer-de-compte" | "connexion" | null
+export type ChoixVue = "changer-de-compte" | "deconnexion" | "connexion" | null
+
+/** Epic-installation-ami, entrée 11 : la confirmation de « Se déconnecter », dite avant d'agir. */
+export const CONFIRMATION_DECONNEXION = {
+  title: "Se déconnecter de Riot ?",
+  message: "ValShop oublie ta session Riot et la boutique gardée sur cet iPhone. Ton historique de parties, ta liste de souhaits et ta clé HenrikDev restent.",
+  confirmLabel: "Se déconnecter",
+  cancelLabel: "Annuler",
+}
 
 /**
  * Ce qu'un appui pousse : une offre du jour ou du Night Market, par l'uuid de son niveau, le prix à afficher
@@ -663,7 +671,7 @@ function ficheDe(f: Ouverture | null, catalogue: PourCatalogue): VirtualNode {
 export const LIGNE_LECTURE_AUTO = "ouverture : boutique gardée expirée, lecture automatique (chemin du bouton Lire la boutique)."
 
 /** Ticket 2.20 : une session Riot est-elle gardée (des cookies au trousseau) ? Trousseau illisible : non. */
-function sessionGardee(): boolean {
+export function sessionGardee(): boolean {
   try {
     return loadCookies().length > 0
   } catch {
@@ -769,6 +777,20 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
     fin.then(() => { if (auto.lecture === fin) auto.lecture = null })
     return () => { montee = false }
   }, [])
+  // Epic-installation-ami, entrée 11 : « Se déconnecter », après confirmation seulement (annulée, ou dialogue en erreur :
+  // rien) ; une seule demande à la fois. Comme le changement de compte, la déconnexion se fait l'app fermée, par le script.
+  const demande = useRef(false)
+  const deconnecter = useStable(async () => {
+    if (demande.current) return
+    demande.current = true
+    try {
+      if (await Dialog.confirm(CONFIRMATION_DECONNEXION)) fermer("deconnexion")
+    } catch {
+      // Dialogue indisponible : rien n'est fait sans confirmation.
+    } finally {
+      demande.current = false
+    }
+  })
   const nm = shop.nightMarket
   const offresNM = (nm?.active ? nm.items ?? [] : []).map(garder)
   const bundles = (Array.isArray(shop.bundles) ? shop.bundles : []).map(garder)
@@ -856,6 +878,8 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
         <Section title="Compte">
           {/* Entrée 10 : inactif pendant une lecture, qui viserait encore l'ancien compte. */}
           <Button title="Changer de compte" disabled={lecture.enCours} action={() => fermer("changer-de-compte")} />
+          {/* Epic-installation-ami, entrée 11 : après confirmation, l'app se ferme et le script déconnecte (index.tsx). */}
+          <Button title="Se déconnecter" role="destructive" disabled={lecture.enCours} action={deconnecter} />
         </Section>
       </List>
     </NavigationStack>

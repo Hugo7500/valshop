@@ -546,7 +546,9 @@ async function reauth(j: Jeton): Promise<Tokens | null> {
     })
     reponse = true
     const { list, ssidChanged } = merge(stored, res.headers.getSetCookie?.() ?? [])
-    saveCookies(list) // réenregistré AVANT toute autre requête
+    // Réenregistré AVANT toute autre requête ; seulement en tenant le verrou (epic-installation-ami, entrée 11) : une lecture
+    // dont le verrou a été repris par une déconnexion ou un changement de compte ne remet pas l'ancienne session au trousseau.
+    if (tient(j)) saveCookies(list)
     await note(ssidChanged
       ? "ssid renouvelé par Riot (valeur différente)."
       : "ssid inchangé par Riot (même valeur).")
@@ -573,7 +575,7 @@ async function reauth(j: Jeton): Promise<Tokens | null> {
       })
       reponse = true
       const { list } = merge(loadCookies(), res.headers.getSetCookie?.() ?? [])
-      saveCookies(list)
+      if (tient(j)) saveCookies(list)
       if (holder.url) await note("Repli GET /authorize utilisé.")
     } catch (e) {
       await note("Repli (GET) en erreur : " + masquerErreur(e))
@@ -1598,11 +1600,11 @@ export async function finirLectures(): Promise<void> {
 const ATTENTE_VERROU_MS = 10_000
 
 /**
- * Prend le verrou pour le changement de compte : attend qu'il soit libre (un
- * verrou mort ne compte pas, lireVerrou, comme dans `refresh`), 10 s au plus, puis
+ * Prend le verrou pour le changement de compte, ou pour la déconnexion (`quoi`, dit au journal) : attend qu'il soit
+ * libre (un verrou mort ne compte pas, lireVerrou, comme dans `refresh`), 10 s au plus, puis
  * l'écrit, libre ou non. Lecture puis écriture synchrones, sans `await` entre les deux.
  */
-async function prendreVerrou(): Promise<Jeton> {
+async function prendreVerrou(quoi: string = "changement de compte"): Promise<Jeton> {
   const limite = Date.now() + ATTENTE_VERROU_MS
   let attendu = false
   for (;;) {
@@ -1615,17 +1617,17 @@ async function prendreVerrou(): Promise<Jeton> {
     if (libre || now >= limite) {
       // Le jeton du changement de compte, tenu par cette exécution comme celui d'une lecture.
       const { jeton, erreur } = poserVerrou(now, "app")
-      if (erreur !== null) await note("changement de compte : verrou non écrit (" + masquerErreur(erreur) + ").")
+      if (erreur !== null) await note(quoi + " : verrou non écrit (" + masquerErreur(erreur) + ").")
       if (!libre) {
-        await note(`changement de compte : mise à jour toujours en cours après ${ATTENTE_VERROU_MS / 1000} s, remplacement quand même.`)
+        await note(`${quoi} : mise à jour toujours en cours après ${ATTENTE_VERROU_MS / 1000} s, remplacement quand même.`)
       } else if (attendu) {
-        await note("changement de compte : verrou libre.")
+        await note(quoi + " : verrou libre.")
       }
       return jeton
     }
     if (!attendu) {
       attendu = true
-      await note(`changement de compte : mise à jour en cours, attente du verrou (${ATTENTE_VERROU_MS / 1000} s au plus).`)
+      await note(`${quoi} : mise à jour en cours, attente du verrou (${ATTENTE_VERROU_MS / 1000} s au plus).`)
     }
     await new Promise<void>((fin) => setTimeout(() => fin(), 500))
   }
@@ -1751,6 +1753,61 @@ export async function changerDeCompte(): Promise<string> {
   }
 
   return await refresh(true)
+}
+
+/**
+ * Se déconnecter de Riot (epic-installation-ami, entrée 11), au premier plan, l'app fermée, sans aucune requête : sous le
+ * verrou des lectures, la session Riot est retirée du trousseau, relu pour preuve (s'il la porte encore, rien d'autre ne
+ * change, et une notification le dit) ; puis ce qui dit qu'un compte est connecté est effacé : les cookies Riot du magasin
+ * partagé des vues web, `shop.json`, `etat.json` et le compte des stats ; le widget est rechargé. Catalogue, icônes, liste de
+ * souhaits, journal, prix, clé HenrikDev et historique des parties (un dossier par compte) ne sont jamais touchés : une
+ * reconnexion au même compte retrouve son historique. La session n'est pas fermée chez Riot.
+ * @returns vrai si la session n'est plus au trousseau.
+ */
+export async function seDeconnecter(): Promise<boolean> {
+  await note("— Déconnexion —")
+  const jeton = await prendreVerrou("déconnexion")
+  try {
+    // Le trousseau d'abord : c'est lui qui reconnecte. S'il refuse, on s'arrête avant de toucher au reste.
+    let retiree = false
+    try {
+      Keychain.remove(COOKIE_KEY)
+      retiree = !Keychain.contains(COOKIE_KEY)
+    } catch { /* journalisé juste après, sans le texte de l'erreur (valeurs possibles) */ }
+    if (!retiree) {
+      await note("déconnexion : session Riot non retirée du trousseau, rien d'autre ne change.")
+      Notification.schedule({
+        title: "ValShop",
+        body: "La déconnexion a échoué. Détail dans le journal.",
+        interruptionLevel: "timeSensitive",
+      })
+      return false
+    }
+    await note("déconnexion : session Riot retirée du trousseau.")
+
+    const r = await retirerCookiesRiot()
+    await note(r.echecs.length === 0
+      ? `déconnexion : fenêtre web sans cookie Riot (${r.retires} retirés).`
+      : `⚠️ déconnexion : ${r.retires} cookies Riot retirés de la fenêtre web sur ${r.trouves} (${r.echecs.join(", ")}).`)
+
+    await note("déconnexion : effacement de shop.json, etat.json et du compte des stats.")
+    try {
+      if (FileManager.existsSync(SHOP_FILE)) FileManager.removeSync(SHOP_FILE)
+    } catch (e) {
+      await note("shop.json non effacé (" + masquerErreur(e) + ") : l'app et le widget montrent encore l'ancienne boutique.")
+    }
+    await effacerEtat()
+    try {
+      effacerCompte()
+    } catch (e) {
+      await note("stats/compte.json non effacé (" + masquerErreur(e) + ") : les stats montrent encore l'ancien compte.")
+    }
+    try { Widget.reloadAll() } catch { /* widget indisponible : il se relira à son prochain réaffichage */ }
+    return true
+  } finally {
+    // Seulement le sien : jamais le verrou d'une autre lecture (entrée 10).
+    relacher(jeton)
+  }
 }
 
 /**

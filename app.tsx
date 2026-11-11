@@ -18,10 +18,10 @@ import {
   policeCondensee, tailleAccessibilite, type Onglet, type Palette, type PerimetreLigne, type SectionReglage,
   FinDuRendu, calculMesure, debutDeRendu, direSondeRendu, finirMesure, mesurerAppui, oublierAppui, useLigneDeMesure,
 } from "./design"
-import { Boutique, SansCache, chargerAvecEmpreinte, chargerListe, relireSiChangee, type ChoixVue, type EmpreinteBoutique, type Shop } from "./vue"
+import { Boutique, SansCache, chargerAvecEmpreinte, chargerListe, relireSiChangee, sessionGardee, type ChoixVue, type EmpreinteBoutique, type Shop } from "./vue"
 import { FeuilleReglages, useHistoriqueAvant } from "./reglages"
 import { echeanceHistoriqueAvant, historiqueAvantMontre, reessaiDe, vueHistoriqueAvant } from "./historique-avant"
-import { EcranConnexion } from "./connexion"
+import { EcranConnexion, InviteConnexion } from "./connexion"
 import { PremierLancement } from "./premier"
 import { connexionRequise } from "./garde-fou"
 import { ETAT_FILE, note } from "./valshop"
@@ -1595,8 +1595,9 @@ export const DELAI_BOUTIQUE_MS = 800
  * dans l'onglet aux tailles d'accessibilité. Ticket 2.20 : elle tient les tentatives automatiques de l'ouverture
  * (OuvertureAuto), que Stats et la Boutique reçoivent ; session expirée : aucun onglet, donc aucune tentative.
  */
-function App({ shop: shopOuvert, empreinte, souhaits, expiree, statut = null }: {
-  shop: Shop | null; empreinte?: EmpreinteBoutique; souhaits?: Souhait[]; expiree: boolean; statut?: Promise<string | null> | null
+function App({ shop: shopOuvert, empreinte, souhaits, expiree, deconnecte = false, statut = null }: {
+  shop: Shop | null; empreinte?: EmpreinteBoutique; souhaits?: Souhait[]; expiree: boolean; deconnecte?: boolean
+  statut?: Promise<string | null> | null
 }) {
   const fermer: (choix?: ChoixVue) => void = Navigation.useDismiss()
   // Ticket 4.52 : le bandeau de l'état des serveurs de Riot, quand la lecture lancée à l'ouverture (presenterApp) en donne un.
@@ -1672,9 +1673,11 @@ function App({ shop: shopOuvert, empreinte, souhaits, expiree, statut = null }: 
                       <ScrollView>
                         <VStack spacing={0}>
                           {haut(true)}
-                          <SansCache />
+                          {deconnecte ? <InviteConnexion palette={palette} /> : <SansCache />}
                         </VStack>
                       </ScrollView>
+                    ) : deconnecte ? (
+                      <InviteConnexion palette={palette} />
                     ) : (
                       <SansCache />
                     )}
@@ -1739,7 +1742,7 @@ async function controlerVersion(): Promise<void> {
  * Ce que l'app lit à chaque ouverture : la boutique gardée (null : absente ou illisible), son empreinte, et si l'Écran de
  * connexion s'impose.
  */
-export type LectureOuverture = { shop: Shop | null; empreinte: EmpreinteBoutique; expiree: boolean }
+export type LectureOuverture = { shop: Shop | null; empreinte: EmpreinteBoutique; expiree: boolean; deconnecte: boolean }
 
 /**
  * La lecture de chaque ouverture de l'app, sur place, sans requête : shop.json, puis etat.json (session expirée depuis la
@@ -1749,7 +1752,9 @@ export type LectureOuverture = { shop: Shop | null; empreinte: EmpreinteBoutique
  */
 export function lireOuverture(): LectureOuverture {
   const { shop, empreinte } = chargerAvecEmpreinte()
-  return { shop, empreinte, expiree: connexionRequise(lireEtat(), shop) }
+  // Epic-installation-ami, entrée 11 : aucune boutique gardée ni aucune session Riot au trousseau (jamais connecté, ou
+  // déconnecté) : l'onglet Boutique invite à se connecter. Le trousseau n'est lu que sans boutique gardée.
+  return { shop, empreinte, expiree: connexionRequise(lireEtat(), shop), deconnecte: shop === null && !sessionGardee() }
 }
 
 /**
@@ -1760,7 +1765,7 @@ export function lireOuverture(): LectureOuverture {
  * réussie de la boutique, l'Écran de connexion ; sinon les onglets.
  */
 export async function presenterApp(lue: LectureOuverture = lireOuverture()): Promise<ChoixVue> {
-  const { shop, empreinte, expiree } = lue
+  const { shop, empreinte, expiree, deconnecte } = lue
   // Relecture 2 : la liste de souhaits lue à l'ouverture (sans boutique ni session expirée : rien, comme avant 4.51).
   const souhaits = shop && !expiree ? chargerListe() : undefined
   // Ticket 4.52 : l'état des serveurs de Riot, lu une fois par ouverture, sans retenir l'app (Écran de connexion : rien).
@@ -1769,8 +1774,8 @@ export async function presenterApp(lue: LectureOuverture = lireOuverture()): Pro
   // retenir l'app ; la feuille Réglages la montre dès qu'elle est sue.
   if (!expiree && aUneCle()) controlerVersion().catch(() => {})
   const choix = await Navigation.present<unknown>({
-    element: <App shop={shop} empreinte={empreinte} souhaits={souhaits} expiree={expiree} statut={statut} />,
+    element: <App shop={shop} empreinte={empreinte} souhaits={souhaits} expiree={expiree} deconnecte={deconnecte} statut={statut} />,
     modalPresentationStyle: "fullScreen",
   })
-  return choix === "changer-de-compte" || choix === "connexion" ? choix : null
+  return choix === "changer-de-compte" || choix === "deconnexion" || choix === "connexion" ? choix : null
 }
