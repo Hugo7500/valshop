@@ -36,7 +36,10 @@ import { ETAT_PRIX_FILE } from "./valshop"
 // epic-stats-import) : l'import de l'historique tracker.gg, en affichage seul, lui aussi, de la
 // vue que l'onglet calcule (historique-avant.ts) du suivi qu'il tient (useHistoriqueAvant, plus
 // bas : lecture de l'état à l'ouverture de la feuille, appui, avancée, fin), et l'appui rendu à
-// l'onglet (`onImporter`) : fermer la feuille ne coupe ni la lecture ni l'import. Après Collecte,
+// l'onglet (`onImporter`) : fermer la feuille ne coupe ni la lecture ni l'import. Entrée 10 de epic-installation-ami : cette
+// section n'est dans l'arbre que lorsqu'un fichier d'import est connu, qu'un import tourne, est fait, ou qu'un appui vient d'y
+// répondre (`historique` null sinon, historiqueAvantMontre) : un nouvel utilisateur, qui ne peut pas fabriquer ce fichier,
+// n'en lit rien ; l'état se lit toujours à l'ouverture de la feuille, section cachée ou non. Après Collecte,
 // Prix du catalogue (ticket 8.9 de epic-boutique-visuels : skins à prix par source et dernier contrôle HenrikDev, lus une fois
 // dans etat-prix.json à l'ouverture), puis Partager ValShop (epic-installation-ami, entrée 3) : le seul lien d'installation passé à la
 // feuille de partage d'iOS (partage.ts), sans requête ni fichier. Sous le titre, Nouvelle version
@@ -495,13 +498,14 @@ function useNouvelleVersion(): NouvelleVersion | null {
  * `ecran`, `maintenant` : l'état d'écran de l'onglet Stats (métadonnées du compte connecté,
  * null sans compte connu, et nombre de parties gardées) et son heure, d'où Ton compte et
  * Collecte, recalculés à chacun de ses rendus. `historique`, `onImporter` : la vue de Ton
- * historique d'avant, calculée par l'onglet, et l'appui sur son bouton. Ticket 4.51 : chaque
+ * historique d'avant, calculée par l'onglet (null : aucun fichier d'import connu, la section
+ * n'est pas rendue), et l'appui sur son bouton. Ticket 4.51 : chaque
  * section est un composant aux props stables (palette de `couleurs`, constante ; métadonnées et
  * heure de l'onglet ; appuis stables) : une avancée de l'import ne rend que sa section, et
  * l'onglet rendu sans rien changer ne rend pas la feuille (props identiques). Rien ne change à l'écran.
  */
 export function FeuilleReglages({ onFermer, refusee = false, ecran, maintenant, historique, onImporter }: {
-  onFermer: () => void; refusee?: boolean; ecran: EtatEcran; maintenant: number; historique: VueHistoriqueAvant; onImporter: () => void
+  onFermer: () => void; refusee?: boolean; ecran: EtatEcran; maintenant: number; historique: VueHistoriqueAvant | null; onImporter: () => void
 }) {
   const nouvelle = useNouvelleVersion()
   return (
@@ -524,7 +528,7 @@ export function FeuilleReglages({ onFermer, refusee = false, ecran, maintenant, 
               {nouvelle !== null ? <SectionMiseAJour key={`maj-${nouvelle.version}`} c={c} v={nouvelle} /> : null}
               <SectionCle c={c} refusee={refusee} />
               <SectionCompte c={c} meta={ecran.meta} />
-              <HistoriqueAvant vue={historique} onImporter={onImporter} c={c} />
+              {historique !== null ? <HistoriqueAvant vue={historique} onImporter={onImporter} c={c} /> : null}
               <SectionCollecte c={c} grand={tailleAccessibilite(env.dynamicTypeSize)} meta={ecran.meta} parties={ecran.parties} maintenant={maintenant} />
               <SectionPrixCatalogue c={c} />
               <SectionPartage c={c} />

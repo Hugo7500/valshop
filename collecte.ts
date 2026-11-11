@@ -2,10 +2,10 @@ import { AbortSignal, AppEvents, Script, fetch } from "scripting"
 import { etapesDesParties, lignesRrLues, premiereLecture, synchroniser, type Base, type BilanIndex, type EtapeLecture, type Ligne } from "./base"
 import { lireCle } from "./cle"
 import {
-  LIGNE_DEJA, LIGNE_DEJA_RAFRAICHIR, LIGNE_SANS_CLE, LIGNE_SANS_COMPTE, annoncesRiot, attenteRestante, classerStatut, delaiLimite,
+  LIGNE_DEJA, LIGNE_DEJA_RAFRAICHIR, LIGNE_SANS_CLE, LIGNE_SANS_COMPTE, annoncesRiot, attenteRestante, classerStatut, deciderMajAuto, delaiLimite,
   fusionnerRr, ligneArretee, lignesRr, lireQuota, messageHote, metaRemiseAZero, nouvelEchec, puuidDesCookies, quotaEpuise,
-  rangDepuisMmr, regionDeBoutique, suiteDeLigne, texteBandeauRiot, texteEchec, texteLigne, type Identite, type LigneRr, type Meta, type Quota,
-  type Rang, type Reprise, type ResultatMiseAJour, type RiotId, type TypeEchec,
+  rangDepuisMmr, regionDeBoutique, suiteDeLigne, texteBandeauRiot, texteEchec, texteLigne, type DecisionMajAuto, type Identite, type LigneRr, type Meta,
+  type Quota, type Rang, type Reprise, type ResultatMiseAJour, type RiotId, type TypeEchec,
 } from "./historique"
 import {
   RESET_MAX_S, TAILLE_PAGE, agentsDeValorantApi, ajouterCumuls, attenteAdmise, attenteAvantDetail, attenteAvantPage, cheminsSuspects, delaiBorne,
@@ -21,11 +21,18 @@ import {
 import {
   cheminIndex, ecrireImage, ecrireMeta, ecrirePartie, ecrireRang, ecrireRr, ecrireSemaine, ecrireSur, effacerIndex, fichiersCumuls,
   fichiersParties, indexPresent, lireCompte, historiquePresent, imagePresente, importIci, lireCumuls, lireHistorique, lireJson,
-  lireMeta, lireRang, lireRr, lireSemaine, metaIllisible, mettreDeCote, nombreParties, partieDuFichier, partieGardee,
+  lireMarqueur, lireMeta, lireRang, lireRr, lireSemaine, metaIllisible, mettreDeCote, nombreParties, partieDuFichier, partieGardee,
   plusRecenteDabord, prendreMarqueur, rafraichirMarqueur, relacherMarqueur, relatifPartie,
 } from "./stockage"
 import { CATALOG, SHOP_FILE, loadCookies, note } from "./valshop"
 import { BORNE_IMAGE, BORNE_JSON, ReponseTropGrande, tailleAnnoncee, texteBorne } from "./securite"
+
+
+
+
+
+
+
 
 
 
@@ -1552,6 +1559,25 @@ export async function collecteRafraichir(r: Rafraichir): Promise<Bilan | null> {
     } catch { /* journal indisponible : rien de plus */ }
     return null
   }
+}
+
+// ─────────────────────────── à l'ouverture de l'app (entrée 20) ───────────────────────────
+
+/**
+ * La mise à jour automatique de l'ouverture part-elle (entrée 20 ; deciderMajAuto de historique.ts) ? Ce que l'onglet Stats
+ * tient (`premier`, le Premier lancement à l'écran ; `cle`, la clé rangée ; `occupe`, sa collecte ou son import en cours),
+ * plus ce qui se lit ici sur place, sans requête, au moment de décider : les métadonnées du compte connecté (celles du
+ * disque, pas celles de l'ouverture : une collecte finie depuis, ici ou par ↻, compte), l'import de cette exécution et le
+ * marqueur de collecte (↻, ou une autre exécution de l'app). Appelée une fois par ouverture, la première page montrée,
+ * jamais avant. Ne lève jamais : compte ou métadonnées illisibles, rien de connu ; un marqueur illisible ne compte pas.
+ */
+export function majAutoALOuverture(e: { premier: boolean; cle: boolean; occupe: boolean }, now: number): DecisionMajAuto {
+  let meta: Meta | null = null
+  try {
+    const id = identite()
+    meta = id ? lireMeta(id) : null
+  } catch { /* compte illisible : rien de connu, rien ne part */ }
+  return deciderMajAuto({ premier: e.premier, cle: e.cle, meta, enCours: e.occupe || importIci(), marqueur: lireMarqueur(), now })
 }
 
 // ─────────────────────────── données du tableau de bord (entrée 16 de epic-stats-tableau-de-bord) ───────────────────────────

@@ -20,17 +20,17 @@ import {
 } from "./design"
 import { Boutique, SansCache, chargerAvecEmpreinte, chargerListe, relireSiChangee, type ChoixVue, type EmpreinteBoutique, type Shop } from "./vue"
 import { FeuilleReglages, useHistoriqueAvant } from "./reglages"
-import { echeanceHistoriqueAvant, reessaiDe, vueHistoriqueAvant } from "./historique-avant"
+import { echeanceHistoriqueAvant, historiqueAvantMontre, reessaiDe, vueHistoriqueAvant } from "./historique-avant"
 import { EcranConnexion } from "./connexion"
 import { PremierLancement } from "./premier"
 import { connexionRequise } from "./garde-fou"
 import { ETAT_FILE, note } from "./valshop"
 import { aUneCle, collerCle } from "./cle"
-import { etatEcran, lireDonnees, lireStatutRiot, mettreAJour, type Bilan, type DonneesTableau, type EtatEcran } from "./collecte"
+import { etatEcran, lireDonnees, lireStatutRiot, majAutoALOuverture, mettreAJour, type Bilan, type DonneesTableau, type EtatEcran } from "./collecte"
 import { ADRESSE_VERSION, CLE_VERSION, DELAI_VERSION, FICHIER_VERSION, annoncerNouvelleVersion, chercherNouvelleVersion } from "./mise-a-jour"
 import {
   ANNONCE_LANCEE, ANNONCE_MS, LIGNE_EN_COURS, RAISON_LIMITE, annonceBilan, attenteRestante, bandeaux, ligneDuPerimetre, ligneFixe,
-  messageHote, prochaineEcheance, suiteDeLigne, type ResultatMiseAJour,
+  ligneMajAuto, messageHote, prochaineEcheance, suiteDeLigne, type ResultatMiseAJour,
 } from "./historique"
 import { ElementAjustable, REPLIS, SEGMENTS_MODE, SEGMENTS_PERIODE } from "./dessin"
 import { EMPLACEMENT_VUE_ENSEMBLE } from "./vue-ensemble"
@@ -49,6 +49,18 @@ import {
 } from "./metriques"
 import type { Partie } from "./reduction"
 import type { Souhait } from "./souhaits"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -709,7 +721,18 @@ type Session = { resultat: ResultatMiseAJour; ajoutees: number; annonce: string;
 
 
 
-export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; palette: Palette; taille: DynamicTypeSize | undefined }) {
+
+
+
+
+
+
+
+
+export function Stats({ haut, palette, taille, auto, quandPrete }: {
+  haut: VirtualNode | null; palette: Palette; taille: DynamicTypeSize | undefined
+  auto?: OuvertureAuto; quandPrete?: (f: () => void) => () => void
+}) {
   // mesure 4.41 : l'ouverture de l'onglet, mesurée de son premier rendu ; le début de chaque rendu d'un appui mesuré.
   const ouvertureMesuree = useRef(false)
   if (!ouvertureMesuree.current) {
@@ -838,7 +861,7 @@ export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; pal
    * à jour touché pendant l'import, qui ne disait que lui, retirée ; après une écriture refusée, l'état de l'import relu,
    * l'onglet déjà mis à jour, sans l'attendre ; un appui écarté (déjà en cours) ne relit rien.
    */
-  const importer = useFonctionStable(async () => {
+  const importerEtRelire = async () => {
     oublierAppui() // mesure 4.46 : l'import n'est pas un appui mesuré
     const avant = ecran.parties
     const bilan = await historique.importer(ecranAllume)
@@ -850,11 +873,27 @@ export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; pal
     if (bilan.issue === "stockage") historique.relireEtat()
     const ajoutees = bilan.issue === "fait" || bilan.issue === "stockage" ? bilan.ajoutees : 0
     if (ajoutees > 0 || apres.parties !== avant) await relire(apres)
+  }
+  // Ticket 2.20 : l'import tient le marqueur de collecte : l'ouverture le suit (`suivre`), la lecture automatique de la
+  // boutique attend sa fin.
+  const importer = useFonctionStable(() => {
+    const fin = importerEtRelire()
+    suivre(auto, fin)
+    return fin
   })
-  const lancer = async () => {
+  /**
+   * La collecte de l'onglet, par le Bouton Mettre à jour (`lancer`), l'étape 3 du Premier lancement, ou toute seule à
+   * l'ouverture (ticket 2.20, `automatique`) : le même chemin dans les trois cas. Seules différences : partie toute seule, elle
+   * n'oublie pas l'appui mesuré en cours (l'ouverture de l'onglet garde sa ligne de mesure) ; et, dans les trois cas, elle
+   * attend d'abord la fin de la lecture automatique de la boutique, si elle court.
+   */
+  const collecte = async (automatique: boolean) => {
     if (occupe.current) return
     occupe.current = true
-    oublierAppui() // mesure 4.46 : la collecte n'est pas un appui mesuré
+    // Mesure 4.46 : la collecte n'est pas un appui mesuré. Partie toute seule (ticket 2.20), elle laisse l'ouverture de l'onglet
+    // finir sa mesure, sauf sans partie gardée : rien ne se dessinera avant la relecture d'après collecte, et la ligne de
+    // l'ouverture dirait la collecte.
+    if (!automatique || ecran.parties === 0) oublierAppui()
     // Les parties gardées avant cette mise à jour (entrée 16 de epic-stats-tableau-de-bord) : comparées à celles d'après.
     const avant = ecran.parties
     setEnCours(true)
@@ -863,7 +902,12 @@ export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; pal
     ecranAllume(true)
     let bilan: Bilan | null = null
     try {
-      bilan = await mettreAJour((ligneLue, gardees) => {
+      // Ticket 2.20 : la lecture automatique de la boutique de cette ouverture court encore (Mettre à jour touché pendant
+      // elle) : la collecte attend sa fin, « Mise à jour… » déjà à l'écran, pour que cette lecture contrôle les prix de HenrikDev
+      // (rangerPrix de valshop.ts ne les lit pas sous le marqueur d'une collecte, et la boutique ne se relit plus de la journée).
+      if (auto !== undefined && auto.lecture !== null) await auto.lecture
+      // L'app fermée pendant cette attente : la collecte ne part plus (son marqueur resterait pris, sans rien pour le rendre).
+      if (!demonte.current) bilan = await mettreAJour((ligneLue, gardees) => {
         setAvancee(ligneLue)
         setEcran((e) => ({ meta: e.meta, parties: gardees }))
       })
@@ -889,6 +933,18 @@ export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; pal
     // entre-temps, mise de côté, sans bilan) ; plus aucune partie : rien de tenu.
     if ((bilan?.ajoutees ?? 0) > 0 || apres.parties !== avant) await relire(apres)
   }
+  /**
+   * La collecte, suivie par l'ouverture (ticket 2.20, `suivre`) : sa fin, jamais rejetée, que la lecture automatique de la
+   * boutique attend avant de partir. Une collecte déjà en cours ici : rien.
+   */
+  const collecter = (automatique: boolean): Promise<void> => {
+    if (occupe.current) return Promise.resolve()
+    const fin = collecte(automatique).then(() => {}, () => {})
+    suivre(auto, fin)
+    return fin
+  }
+  /** Le Bouton Mettre à jour : la collecte, sur un appui. */
+  const lancer = () => collecter(false)
   /** Étape 3 du Premier lancement : l'accueil des stats, et la collecte, par le chemin de Mettre à jour. */
   const recuperer = () => {
     setPremier(false)
@@ -1043,8 +1099,50 @@ export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; pal
     </VStack>
   )
   // Ticket 4.51 : la vue de Ton historique d'avant, la même d'un rendu à l'autre tant qu'elle dit la même chose : la feuille
-  // n'est rendue de nouveau que quand ce qu'elle montre change (props de Scripting ; fermer et importer stables).
-  const vueHistorique = useValeurStable(vueHistoriqueAvant(historique.suivi, maintenant, enCours))
+  // n'est rendue de nouveau que quand ce qu'elle montre change (props de Scripting ; fermer et importer stables). Entrée 10 de
+  // epic-installation-ami : null tant qu'aucun fichier d'import n'est connu (historiqueAvantMontre) : la feuille n'a alors pas
+  // cette section.
+  const vueHistorique = useValeurStable(historiqueAvantMontre(historique.suivi, maintenant) ? vueHistoriqueAvant(historique.suivi, maintenant, enCours) : null)
+  /**
+   * Ticket 2.20 : la mise à jour automatique de cette ouverture, décidée une fois (`auto.stats`), sur l'état du dernier rendu
+   * et les métadonnées relues sur place (majAutoALOuverture) :
+   * lancée par le chemin du bouton (`collecter`, que l'ouverture suit), ou écartée (la
+   * raison à la console, rien à l'écran ni au journal). L'onglet démonté : rien, et la tentative reste à l'onglet qui le
+   * remplace (repli de la page web vers Stats natif).
+   */
+  const deciderAuto = useFonctionStable(() => {
+    if (auto === undefined || auto.stats || demonte.current) return
+    auto.stats = true
+    const decision = majAutoALOuverture({ premier, cle, occupe: occupe.current || historique.suivi.enCours }, Date.now())
+    if (!decision.lancer) {
+      try { console.log(`ouverture : pas de mise à jour automatique des stats (${decision.raison})`) } catch { /* console indisponible */ }
+      return
+    }
+    try { note(ligneMajAuto(decision.age, decision.reprise)).catch(() => {}) } catch { /* journal indisponible : la collecte part quand même */ }
+    collecter(true)
+  })
+  /**
+   * Ticket 2.20 : l'attente passée, la décision ; la boutique d'abord, comme ↻ : tant que la lecture automatique de la boutique
+   * de cette ouverture court (`auto.lecture`), la décision attend sa fin, quelle qu'en soit l'issue. Jamais les deux en même
+   * temps : la lecture de la boutique ne contrôle pas les prix de HenrikDev sous le marqueur d'une collecte (rangerPrix de
+   * valshop.ts), et ne les relit plus de la journée.
+   */
+  const majAuto = useFonctionStable(() => {
+    if (auto === undefined || auto.stats || demonte.current) return
+    if (auto.lecture !== null) auto.lecture.then(() => deciderAuto())
+    else deciderAuto()
+  })
+  // Ticket 2.20 : armée à la première page montrée (`quandPrete` ; Stats natif : son montage), elle part ATTENTE_MAJ_AUTO_MS
+  // après ; démonté avant (app fermée, repli de la page web vers le natif), rien ne part d'ici.
+  useEffect(() => {
+    if (auto === undefined || auto.stats) return
+    let minuterie: ReturnType<typeof setTimeout> | null = null
+    const armer = () => { if (minuterie === null) minuterie = setTimeout(() => majAuto(), ATTENTE_MAJ_AUTO_MS) }
+    let desabonner = () => {}
+    if (quandPrete) desabonner = quandPrete(armer)
+    else armer()
+    return () => { desabonner(); if (minuterie !== null) clearTimeout(minuterie) }
+  }, [])
   // Le contenu qui défile, dans le lecteur de défilement vertical ; le ScrollView porte la Feuille « Réglages des stats ».
   const defile = (corps: VirtualNode) => (
     <ScrollViewReader>
@@ -1142,7 +1240,45 @@ export function Stats({ haut, palette, taille }: { haut: VirtualNode | null; pal
 
 
 
-export const INTERRUPTEURS = { statsWeb: true, statsEphemere: false, navigationGardee: false, nettoyageCookies: true }
+
+
+
+export const INTERRUPTEURS = { statsWeb: true, statsEphemere: false, navigationGardee: false, nettoyageCookies: true, majAuto: true }
+
+/**
+ * Ticket 2.20 : ce qu'une ouverture de l'app (une présentation, presenterApp) a déjà tenté toute seule : `stats`, la collecte
+ * de Mettre à jour ; `boutique`, la lecture de la boutique expirée. Chacune décidée une fois, lancée ou non, puis plus jamais
+ * dans cette ouverture, quelle qu'en soit l'issue : ni boucle, ni nouvel essai. `lecture` : la fin de la lecture automatique
+ * de la boutique tant qu'elle court ; `collecte` : la fin de ce qui tient le marqueur de collecte dans cet onglet (une
+ * collecte, automatique ou lancée par Mettre à jour, un import : `suivre`) ; des promesses jamais rejetées, null hors d'elles.
+ * Chacune attend l'autre avant de partir : la lecture automatique ne croise jamais une collecte de cette ouverture (elle ne
+ * contrôlerait pas les prix de HenrikDev : rangerPrix de valshop.ts), et une collecte, même touchée, attend la lecture
+ * automatique en cours. Un seul objet par ouverture, tenu par `App` (il survit au repli de la page web vers Stats natif) et
+ * passé tel quel aux onglets, qui y écrivent.
+ */
+export type OuvertureAuto = { stats: boolean; boutique: boolean; lecture: Promise<void> | null; collecte: Promise<void> | null }
+
+/**
+ * Ticket 2.20 : `p` (une collecte ou un import de l'onglet Stats) tient le marqueur de collecte : l'ouverture `auto` en garde
+ * la fin dans `collecte`, avec celle de ce qui courait déjà, jusqu'à ce que tout soit fini. Sans ouverture suivie (interrupteur
+ * éteint) : rien. Ne rejette jamais.
+ */
+function suivre(auto: OuvertureAuto | undefined, p: Promise<unknown>): void {
+  if (auto === undefined) return
+  const avant = auto.collecte ?? Promise.resolve()
+  const fin: Promise<void> = Promise.all([avant, p.then(() => {}, () => {})]).then(() => {})
+  auto.collecte = fin
+  fin.then(() => { if (auto.collecte === fin) auto.collecte = null })
+}
+
+/**
+ * Ticket 2.20 : l'attente entre la première page montrée et la décision de la mise à jour automatique : le tour qui montre la
+ * page (cache retiré, page-web.tsx) ne porte rien de plus, et la collecte ne commence qu'une fois l'écran affiché ; plus
+ * longue que DELAI_BOUTIQUE_MS, pour que la Boutique, montée ce délai après la page, ait décidé avant : la boutique expirée se
+ * lit d'abord, la collecte ensuite, comme ↻. L'ordre n'en dépend pas pour être juste : celle qui part la seconde attend la
+ * fin de la première (OuvertureAuto).
+ */
+export const ATTENTE_MAJ_AUTO_MS = 1500
 reglerPageWeb({ ephemere: () => INTERRUPTEURS.statsEphemere, garde: () => INTERRUPTEURS.navigationGardee })
 /**
  * Le dernier corps de page traduit par StatsWeb, son arbre et son moteur : pour le harnais (page tenue, arbre vu, état des
@@ -1185,9 +1321,10 @@ type CalculPageWeb = {
  * (destination de Stats) par le sien tant qu'il est poussé, leur traduction en HTML et les menus du périmètre. Lève si un
  * composant ou la traduction lève (ticket 4.55 : StatsWeb le dit au journal et passe au natif).
  */
-function calculerPageWeb(e: EtatPageWeb, haut: PropsHaut | null, palette: Palette, taille: DynamicTypeSize | undefined): CalculPageWeb {
+function calculerPageWeb(e: EtatPageWeb, haut: PropsHaut | null, palette: Palette, taille: DynamicTypeSize | undefined, auto: OuvertureAuto | undefined): CalculPageWeb {
+  // Ticket 2.20 : `auto` et quandPagePrete, deux références stables (le moteur web ne rend pas Stats de nouveau pour elles).
   const arbre = rendreWeb(e.moteur, () => (
-    <Stats haut={haut ? elementWeb(Haut, haut) : null} palette={palette} taille={taille} />
+    <Stats haut={haut ? elementWeb(Haut, haut) : null} palette={palette} taille={taille} auto={auto} quandPrete={quandPagePrete} />
   ), { effetsApres: true })
   // Ticket 4.51 : le Détail d'une partie (destination de Stats), rendu par son moteur tant qu'il est poussé.
   const destination = porteur(arbre, "navigationDestination")
@@ -1269,10 +1406,12 @@ function porteur(n: VueWeb, cle: string): VueWeb | null {
  * après l'affichage (effet natif de l'onglet), comme sous Scripting. Taille de texte ou contraste changés : le document
  * entier. La page ne se charge pas (`onEchec`) : une ligne au journal, et Stats natif à sa place.
  */
-function StatsWeb({ haut, palette, taille, contraste, visible = true }: {
+function StatsWeb({ haut, palette, taille, contraste, visible = true, auto }: {
   haut: PropsHaut | null; palette: Palette; taille: DynamicTypeSize | undefined; contraste: ColorSchemeContrast | undefined
   /** L'onglet Stats à l'écran (faux : Boutique) : le menu ouvert dans la page se ferme, la garde de chargement attend. */
   visible?: boolean
+  /** Ticket 2.20 : les tentatives automatiques de cette ouverture, passées à Stats (web, ou natif après un repli). */
+  auto?: OuvertureAuto
 }) {
   const [, setTour] = useState(0)
   const [echec, setEchec] = useState(false)
@@ -1315,7 +1454,7 @@ function StatsWeb({ haut, palette, taille, contraste, visible = true }: {
   // Les effets des composants rendus ci-dessous, après l'affichage de ce rendu (comme sous Scripting).
   const numero = ++e.rendus
   useEffect(() => { if (!echec) { lancerEffetsWeb(e.moteur); lancerEffetsWeb(e.moteurDetail) } }, [numero])
-  if (echec) return <Stats haut={haut ? <Haut {...haut} /> : null} palette={palette} taille={taille} />
+  if (echec) return <Stats haut={haut ? <Haut {...haut} /> : null} palette={palette} taille={taille} auto={auto} />
   const env = `${taille}|${contraste}`
   if (env !== e.env) {
     e.env = env
@@ -1328,7 +1467,7 @@ function StatsWeb({ haut, palette, taille, contraste, visible = true }: {
   // l'onglet, qu'elle laissait vide sans rien écrire : une ligne au journal (sans identifiant), et Stats natif à sa place.
   let calcul: CalculPageWeb
   try {
-    calcul = calculerPageWeb(e, haut, palette, taille)
+    calcul = calculerPageWeb(e, haut, palette, taille, auto)
   } catch (erreur) {
     if (!e.echecDit) {
       e.echecDit = true
@@ -1336,7 +1475,7 @@ function StatsWeb({ haut, palette, taille, contraste, visible = true }: {
     }
     fermerMoteurWeb(e.moteur); fermerMoteurWeb(e.moteurDetail)
     Promise.resolve().then(() => { if (!e.demonte) { fermerPageWeb(); setEchec(true) } })
-    return <Stats haut={haut ? <Haut {...haut} /> : null} palette={palette} taille={taille} />
+    return <Stats haut={haut ? <Haut {...haut} /> : null} palette={palette} taille={taille} auto={auto} />
   }
   const { arbre, d, poussee, arbreDetail, T, classes, html } = calcul
   /**
@@ -1453,7 +1592,8 @@ export const DELAI_BOUTIQUE_MS = 800
  * L'app : Stats à l'ouverture ; `expiree` (session Riot expirée, lue dans etat.json par
  * `presenterApp`) : l'Écran de connexion seul, ni Barre d'onglets ni onglet monté. Taille du
  * texte et contraste lus dans l'environnement : En-tête ValShop et Barre d'onglets fixes, ou
- * dans l'onglet aux tailles d'accessibilité.
+ * dans l'onglet aux tailles d'accessibilité. Ticket 2.20 : elle tient les tentatives automatiques de l'ouverture
+ * (OuvertureAuto), que Stats et la Boutique reçoivent ; session expirée : aucun onglet, donc aucune tentative.
  */
 function App({ shop: shopOuvert, empreinte, souhaits, expiree, statut = null }: {
   shop: Shop | null; empreinte?: EmpreinteBoutique; souhaits?: Souhait[]; expiree: boolean; statut?: Promise<string | null> | null
@@ -1496,6 +1636,9 @@ function App({ shop: shopOuvert, empreinte, souhaits, expiree, statut = null }: 
     <Haut onglet={onglet} onChoix={choisir} onFermer={() => fermer()} marges={marges} />
   )
   const propsHaut = (marges: boolean): PropsHaut => ({ onglet, onChoix: choisir, onFermer: () => fermer(), marges })
+  // Ticket 2.20 : les tentatives automatiques de cette ouverture, le même objet à chaque rendu ; interrupteur éteint : aucune.
+  const tentatives = useRef<OuvertureAuto>({ stats: false, boutique: false, lecture: null, collecte: null })
+  const auto = INTERRUPTEURS.majAuto ? tentatives.current : undefined
   return (
     <EnvironmentValuesReader keys={["dynamicTypeSize", "colorSchemeContrast"]}>
       {(env) => {
@@ -1517,14 +1660,14 @@ function App({ shop: shopOuvert, empreinte, souhaits, expiree, statut = null }: 
                 <ZStack>
                   <VStack {...masque(onglet === "stats")}>
                     {INTERRUPTEURS.statsWeb ? (
-                      <StatsWeb haut={defile ? propsHaut(true) : null} palette={palette} taille={env.dynamicTypeSize} contraste={env.colorSchemeContrast} visible={onglet === "stats"} />
+                      <StatsWeb haut={defile ? propsHaut(true) : null} palette={palette} taille={env.dynamicTypeSize} contraste={env.colorSchemeContrast} visible={onglet === "stats"} auto={auto} />
                     ) : (
-                      <Stats haut={defile ? haut(true) : null} palette={palette} taille={env.dynamicTypeSize} />
+                      <Stats haut={defile ? haut(true) : null} palette={palette} taille={env.dynamicTypeSize} auto={auto} />
                     )}
                   </VStack>
                   <VStack {...masque(onglet === "boutique")}>
                     {!boutiqueMontee && onglet !== "boutique" ? null : shop ? (
-                      <Boutique shop={shop} souhaits={souhaits} entete={defile ? haut(false) : undefined} />
+                      <Boutique shop={shop} souhaits={souhaits} entete={defile ? haut(false) : undefined} auto={auto} />
                     ) : defile ? (
                       <ScrollView>
                         <VStack spacing={0}>
@@ -1593,15 +1736,31 @@ async function controlerVersion(): Promise<void> {
 }
 
 /**
+ * Ce que l'app lit à chaque ouverture : la boutique gardée (null : absente ou illisible), son empreinte, et si l'Écran de
+ * connexion s'impose.
+ */
+export type LectureOuverture = { shop: Shop | null; empreinte: EmpreinteBoutique; expiree: boolean }
+
+/**
+ * La lecture de chaque ouverture de l'app, sur place, sans requête : shop.json, puis etat.json (session expirée depuis la
+ * dernière lecture réussie de la boutique : `connexionRequise`, garde-fou.ts). Entrée 22 de epic-stats-collecte : le lancement
+ * sans paramètre (index.tsx) la fait lui-même, pour savoir si une boutique est gardée, et la donne à presenterApp : rien n'est
+ * lu deux fois.
+ */
+export function lireOuverture(): LectureOuverture {
+  const { shop, empreinte } = chargerAvecEmpreinte()
+  return { shop, empreinte, expiree: connexionRequise(lireEtat(), shop) }
+}
+
+/**
  * Présente l'app en plein écran et rend la main quand elle se ferme : « changer-de-compte »
  * si Boutique l'a demandé, « connexion » si l'Écran de connexion ou l'étape 1 du Premier
  * lancement l'a demandé, null après le Bouton Fermer. etat.json et shop.json sont lus à
- * chaque ouverture : session expirée depuis la dernière lecture réussie de la boutique
- * (`connexionRequise`, garde-fou.ts), l'Écran de connexion ; sinon les onglets.
+ * chaque ouverture (`lue`, ou lireOuverture) : session expirée depuis la dernière lecture
+ * réussie de la boutique, l'Écran de connexion ; sinon les onglets.
  */
-export async function presenterApp(): Promise<ChoixVue> {
-  const { shop, empreinte } = chargerAvecEmpreinte()
-  const expiree = connexionRequise(lireEtat(), shop)
+export async function presenterApp(lue: LectureOuverture = lireOuverture()): Promise<ChoixVue> {
+  const { shop, empreinte, expiree } = lue
   // Relecture 2 : la liste de souhaits lue à l'ouverture (sans boutique ni session expirée : rien, comme avant 4.51).
   const souhaits = shop && !expiree ? chargerListe() : undefined
   // Ticket 4.52 : l'état des serveurs de Riot, lu une fois par ouverture, sans retenir l'app (Écran de connexion : rien).

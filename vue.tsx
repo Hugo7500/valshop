@@ -13,16 +13,18 @@ import { FicheAccessoire } from "./fiche-accessoire"
 import { FicheBundle } from "./fiche-bundle"
 import { FicheSkin, type OffreAffichee } from "./fiche-skin"
 import { jusquAu, libelleType, type ObjetBundle } from "./fiches"
-import type { IssueLecture } from "./garde-fou"
+import { boutiqueExpiree, type IssueLecture } from "./garde-fou"
 import { delaiEnClair } from "./historique"
-import { CATALOG, SHOP_FILE, WISHLIST_FILE, lireBoutique } from "./valshop"
+import { CATALOG, SHOP_FILE, WISHLIST_FILE, lireBoutique, loadCookies, note } from "./valshop"
 import { imageAdmise } from "./securite"
 
 // Onglet Boutique de l'app (app.tsx), ouverte par un appui sur le widget (`?ouvrir=vue`,
-// ou `?ouvrir=connexion` après le login) : la vue détaillée de la v1. Elle lit `shop.json`
+// ou `?ouvrir=connexion` après le login) ou par le lancement du script sans paramètre : la
+// vue détaillée de la v1. Elle lit `shop.json`
 // (par `charger`, que l'app appelle à l'ouverture) et les icônes déjà en cache, et pour la
-// liste de souhaits `catalog.json` et `wishlist.json` : AUCUNE requête, sauf pour une
-// icône restée en adresse web, que le moteur n'écrit plus. Seule écriture,
+// liste de souhaits `catalog.json` et `wishlist.json` : AUCUNE requête à l'affichage, sauf pour une
+// icône restée en adresse web, que le moteur n'écrit plus (la lecture de la boutique, par son bouton ou à l'ouverture de
+// l'app, est plus bas). Seule écriture,
 // `wishlist.json`, réécrite par l'écran de liste à chaque appui (jamais par le moteur).
 // Un appui sur une offre du jour ou du Night Market pousse sa fiche (fiche-skin.tsx,
 // CAP-25), un appui sur un bundle la sienne (fiche-bundle.tsx, qui ouvre à son tour celle
@@ -39,6 +41,11 @@ import { imageAdmise } from "./securite"
 // login), indicateur d'activité pendant elle, puis écrit son issue sous la section et la donne
 // à VoiceOver ; shop.json est relu après chaque appui. Session expirée : « Me connecter » ferme
 // l'app en rendant « connexion », comme l'Écran de connexion.
+// Ticket 2.20 de epic-stats-collecte (ValShop se met à jour tout seul à l'ouverture) : à son montage (après la première
+// page de Stats, ou au premier appui sur l'onglet), la Boutique lance d'elle-même cette même lecture, par le chemin du bouton,
+// si la boutique gardée a expiré (reset lisible et passé) et que des cookies Riot sont au trousseau : une seule tentative par
+// ouverture de l'app, jamais de fenêtre de login ni de nouvel essai ; son issue se dit sous la section, comme après un appui.
+// Hors de cette lecture et de celle du bouton, l'onglet reste sans requête.
 
 /** Même cadre que l'image d'une tuile du widget en format moyen. */
 const CADRE = { width: 68, height: 30 }
@@ -652,14 +659,34 @@ function ficheDe(f: Ouverture | null, catalogue: PourCatalogue): VirtualNode {
   return <FicheSkin id={f.id} prix={f.prix} offre={f.offre} ouverture={f.ouverture} />
 }
 
+/** Ticket 2.20 : la ligne du journal d'une lecture de la boutique qui part toute seule, avant celles de la lecture. */
+export const LIGNE_LECTURE_AUTO = "ouverture : boutique gardée expirée, lecture automatique (chemin du bouton Lire la boutique)."
+
+/** Ticket 2.20 : une session Riot est-elle gardée (des cookies au trousseau) ? Trousseau illisible : non. */
+function sessionGardee(): boolean {
+  try {
+    return loadCookies().length > 0
+  } catch {
+    return false
+  }
+}
+
 /**
  * L'onglet Boutique : en-tête (dernière lecture, reset), boutique du jour, Night Market,
  * bundles, accessoires, liste de souhaits, compte. Racine sans barre de navigation, l'en-tête
  * de l'app en tient lieu ; l'éditeur de la liste et la fiche d'une offre, poussés, gardent la
  * leur. `entete`, que l'app passe aux tailles de texte d'accessibilité : En-tête ValShop et
  * Barre d'onglets, rendus en première section, sans fond ni séparateur, pour défiler avec la liste.
+ * Ticket 2.20 : `auto`, les tentatives automatiques de cette ouverture de l'app (app.tsx, OuvertureAuto ; absent :
+ * interrupteur éteint) : au montage, une fois (`auto.boutique`), si la boutique reçue a expiré (boutiqueExpiree) et qu'une
+ * session est gardée, la lecture du bouton part toute seule (`lire`), une ligne au journal avant elle ; sinon rien. Jamais
+ * pendant une collecte ou un import de cette ouverture (`auto.collecte` : automatique, ou lancés par leur bouton) : après
+ * eux ; `auto.lecture` dit sa fin, que toute collecte de l'onglet Stats attend de même.
  */
-export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus }: { shop: Shop; entete?: VirtualNode; souhaits?: Souhait[] }) {
+export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }: {
+  shop: Shop; entete?: VirtualNode; souhaits?: Souhait[]
+  auto?: { boutique: boolean; lecture: Promise<void> | null; collecte: Promise<void> | null }
+}) {
   // Entrée 10 : la boutique relue après un appui sur « Lire la boutique » ; celle de l'ouverture avant.
   const [relue, setRelue] = useState<Shop | null>(null)
   const shop = relue ?? ouverte
@@ -718,6 +745,30 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus }: { sho
     pousser({ quoi: "skin", id: item.id, prix, offre: { name: item.name, icon: item.icon } }))
   // Le login ne s'empile pas sur l'app : elle se ferme, le script l'ouvre ensuite.
   const fermer: (choix: ChoixVue) => void = Navigation.useDismiss()
+  // Ticket 2.20 : la lecture automatique, à son heure : rien si un appui lit déjà ; `apresAttente` (elle a attendu la fin de
+  // la collecte) : rien non plus si la boutique n'est plus expirée, shop.json relu sur place (lue entre-temps par un appui ou
+  // par ↻) ; sinon une ligne au journal, puis le chemin du bouton.
+  const lireAuto = useStable(async (apresAttente: boolean) => {
+    if (occupe.current) return
+    if (apresAttente && !boutiqueExpiree(Date.now(), charger() ?? shop)) return
+    try { note(LIGNE_LECTURE_AUTO).catch(() => {}) } catch { /* journal indisponible : la lecture part quand même */ }
+    await lire()
+  })
+  // Ticket 2.20 : la lecture automatique de cette ouverture, décidée une fois, au montage : la boutique reçue expirée et une
+  // session gardée, elle part par le chemin du bouton, après la collecte ou l'import de cette ouverture s'il court (jamais en
+  // même temps : les prix de HenrikDev ne se contrôlent pas sous leur marqueur) ; sinon rien, et plus rien ensuite sans un appui.
+  // Démontée avant son heure (app fermée), elle ne part pas.
+  useEffect(() => {
+    if (auto === undefined || auto.boutique) return
+    auto.boutique = true
+    if (!boutiqueExpiree(Date.now(), ouverte) || !sessionGardee()) return
+    let montee = true
+    const attendue = auto.collecte
+    const fin = (attendue ?? Promise.resolve()).then(() => (montee ? lireAuto(attendue !== null) : undefined)).then(() => {}, () => {})
+    auto.lecture = fin
+    fin.then(() => { if (auto.lecture === fin) auto.lecture = null })
+    return () => { montee = false }
+  }, [])
   const nm = shop.nightMarket
   const offresNM = (nm?.active ? nm.items ?? [] : []).map(garder)
   const bundles = (Array.isArray(shop.bundles) ? shop.bundles : []).map(garder)

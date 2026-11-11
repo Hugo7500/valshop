@@ -26,6 +26,8 @@
 
 
 
+
+
 // ─────────────────────────── compte des stats ───────────────────────────
 
 /** Le compte que l'on interroge : son PUUID, et sa région Riot, qui sert d'`{affinity}` à HenrikDev. */
@@ -1129,3 +1131,79 @@ export function chiffresCollecte(meta: Meta | null, parties: number, now: number
 
 /** La note sous les Chiffres de Collecte : pourquoi ce rythme (la fenêtre de HenrikDev). */
 export const NOTE_COLLECTE = "HenrikDev ne garde que tes 100 dernières parties environ : au-delà, les plus anciennes ne seraient plus récupérables."
+
+// ─────────────────────────── mise à jour automatique à l'ouverture (entrée 20) ───────────────────────────
+
+/**
+ * Le délai entre deux mises à jour qui partent toutes seules à l'ouverture de l'app (entrée 20) : aucune tant que la
+ * dernière mise à jour menée à son terme, réussie ou en échec, a moins de 30 min. Une collecte sans partie nouvelle coûte
+ * trois requêtes à HenrikDev (mmr v3, mmr-history v2, puis la page 1 de la liste v4, qui s'arrête à la frontière), soit 3 à
+ * 6 unités de son quota de 30 par minute (api-henrikdev.md, Limites), aucune à valorant-api hors changement de version du
+ * jeu, et environ sept secondes (6 s entre mmr-history et la page) : à ce délai, six requêtes par heure au plus pour des
+ * mises à jour menées à leur terme. Le coût permettrait plus court ; 30 min parce qu'une partie classée dure rarement moins et
+ * que HenrikDev est un service gratuit : une partie courte finie avant ce délai attend le Bouton Mettre à jour, qui reste. Hors
+ * de ce délai : une collecte coupée par la fermeture de l'app avant sa première page ne date ni réussite ni échec ; le marqueur
+ * de collecte la couvre MARQUEUR_MS, puis l'ouverture suivante réessaie (deux requêtes de plus, mmr v3 et mmr-history v2).
+ */
+export const DELAI_MAJ_AUTO_MS = 30 * 60_000
+
+/**
+ * Pourquoi la mise à jour automatique ne part pas (entrée 20) : Premier lancement à l'écran (son étape 3 reste un geste) ;
+ * clé absente ; compte inconnu ; historique sans numéro de réduction (Mettre à jour le mettrait de côté : jamais sans
+ * geste) ; première collecte pas terminée (longue : un geste) ; une collecte ou un import en cours, ici ou ailleurs
+ * (marqueur actif) ; le délai d'une limite ; DELAI_MAJ_AUTO_MS pas passé.
+ */
+export type RefusMajAuto = "premierLancement" | "sansCle" | "sansCompte" | "sansNumero" | "premiereCollecte" | "enCours" | "limite" | "delai"
+
+/**
+ * La décision : partir (`age` : ms depuis la dernière mise à jour menée à son terme, null sans date lisible ; `reprise` : un
+ * repère de reprise attend, la collecte reprend), ou non, et pourquoi.
+ */
+export type DecisionMajAuto = { lancer: true; age: number | null; reprise: boolean } | { lancer: false; raison: RefusMajAuto }
+
+/**
+ * L'âge (ms, jamais négatif) de la dernière mise à jour menée à son terme, à `now` : le plus récent du dernier échec et de la
+ * dernière réussite ; null sans date lisible. Un repère de reprise qui attend : la dernière réussite ne compte plus (des
+ * parties restent à lire, une collecte coupée ou celle de ↻ arrêtée à son échéance), seul un échec fait attendre. Une date
+ * dans l'avenir (horloge changée) compte par son écart, comme le marqueur.
+ */
+function ageDerniereMaj(m: Meta, now: number): number | null {
+  const dates = [m.dernierEchec ? m.dernierEchec.quand : null, m.reprise === null ? m.derniereReussite : null]
+  let age: number | null = null
+  for (const iso of dates) {
+    const t = iso === null ? NaN : Date.parse(iso)
+    if (!Number.isNaN(t)) age = age === null ? Math.abs(now - t) : Math.min(age, Math.abs(now - t))
+  }
+  return age
+}
+
+/**
+ * La mise à jour automatique de l'ouverture part-elle (entrée 20) ? Pure : `premier`, le Premier lancement est à l'écran ;
+ * `cle`, la clé HenrikDev est rangée ; `meta`, les métadonnées du compte connecté (null : compte inconnu) ; `enCours`, une
+ * collecte ou un import tourne dans cette exécution ; `marqueur`, le contenu du marqueur de collecte lu sur place (celui de
+ * ↻ ou d'une autre exécution, tant qu'il est actif) ; `now`. Dans cet ordre, le premier refus rendu (RefusMajAuto) ; sinon
+ * elle part. Jamais une première collecte ni une mise de côté : seulement la collecte suivante, qui s'arrête à la frontière.
+ */
+export function deciderMajAuto(e: { premier: boolean; cle: boolean; meta: Meta | null; enCours: boolean; marqueur: string | null; now: number }): DecisionMajAuto {
+  const non = (raison: RefusMajAuto): DecisionMajAuto => ({ lancer: false, raison })
+  if (e.premier) return non("premierLancement")
+  if (!e.cle) return non("sansCle")
+  const m = e.meta
+  if (m === null) return non("sansCompte")
+  if (m.reduction === null) return non("sansNumero")
+  if (m.premiereCollecte.terminee === null) return non("premiereCollecte")
+  if (e.enCours || marqueurActif(e.marqueur, e.now)) return non("enCours")
+  if (attenteRestante(m, e.now) !== null) return non("limite")
+  const age = ageDerniereMaj(m, e.now)
+  if (age !== null && age < DELAI_MAJ_AUTO_MS) return non("delai")
+  return { lancer: true, age, reprise: m.reprise !== null }
+}
+
+/**
+ * La ligne du journal d'une mise à jour qui part toute seule (entrée 20), avant celles de la collecte : un repère de reprise
+ * qui attend, ou l'âge de la dernière mise à jour menée à son terme, en minutes ; ni identifiant, ni date.
+ */
+export function ligneMajAuto(age: number | null, reprise: boolean = false): string {
+  const depuis = reprise ? "reprise à faire" : age === null ? "aucune mise à jour datée" : `dernière il y a ${Math.floor(age / 60_000)} min`
+  return `ouverture : mise à jour automatique des stats (${depuis}).`
+}

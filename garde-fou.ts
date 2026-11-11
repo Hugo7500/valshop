@@ -1,4 +1,5 @@
-// Garde-fou : une lecture Riot par journée Valorant, jamais deux en parallèle ;
+// Garde-fou : une lecture Riot par journée Valorant, jamais deux en parallèle (et quand la boutique gardée a expiré, pour
+// la lecture qui part toute seule à l'ouverture de l'app : boutiqueExpiree) ;
 // le format d'etat.json, que le moteur écrit à l'échec et que le widget et l'app lisent
 // (Écran de connexion) ; la lecture d'un échec de Riot (résumé du corps pour le journal, maintenance
 // probable) ; et le tri des cookies Riot, que le changement de compte remplace.
@@ -38,6 +39,17 @@ function instant(iso: unknown): number | null {
 export function deciderLecture(now: number, shop: BoutiqueLue | null | undefined): Decision {
   const resetAt = instant(shop?.daily?.resetAt)
   return resetAt !== null && now < resetAt ? "cache" : "lecture"
+}
+
+/**
+ * La boutique gardée a-t-elle expiré (entrée 20 de epic-stats-collecte : la lecture qui part toute seule à l'ouverture de
+ * l'app) ? Oui seulement si elle a un reset lisible et passé (`now >= daily.resetAt`). Plus stricte que deciderLecture : sans
+ * boutique gardée, ou sans reset lisible, rien ne part sans un appui (jamais une lecture Riot par ouverture pour un fichier
+ * abîmé) ; la lecture elle-même repasse par le garde-fou.
+ */
+export function boutiqueExpiree(now: number, shop: BoutiqueLue | null | undefined): boolean {
+  const resetAt = instant(shop?.daily?.resetAt)
+  return resetAt !== null && now >= resetAt
 }
 
 /**

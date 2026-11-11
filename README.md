@@ -42,7 +42,13 @@ Les statistiques viennent de HenrikDev, un service gratuit et non officiel, qui 
 
 ### 6. Récupérer tes parties
 
-Touche **Récupérer mes parties** (troisième étape) et laisse l'app ouverte quelques minutes. Ensuite, touche **Mettre à jour** dans l'onglet **Stats** de temps en temps : les réglages des stats te disent quand en refaire une.
+Touche **Récupérer mes parties** (troisième étape) et laisse l'app ouverte quelques minutes.
+
+Le premier jour, tu ne verras que tes parties récentes : HenrikDev n'en donne qu'une centaine environ, pas tout ton passé. Ton historique se construit ensuite, partie après partie, et il reste sur ton iPhone.
+
+Ensuite, plus rien à faire : à chaque ouverture de l'app (un appui sur le widget, ou sur **valshop-s0** dans la liste de Scripting), ValShop se met à jour tout seul. Il lit la boutique du jour si elle n'a pas encore été lue, puis récupère tes nouvelles parties, sauf s'il l'a déjà fait, ou essayé sans y arriver, dans les 30 dernières minutes. Laisse l'app ouverte jusqu'à ce que l'onglet **Stats** dise « mise à jour à l'instant » : une dizaine de secondes, un peu plus à la première ouverture du jour. Le bouton **Mettre à jour** de l'onglet **Stats** reste là pour le faire tout de suite.
+
+Ouvre ValShop au moins toutes les deux semaines pour ne rien perdre.
 
 ## Ce que ValShop fait de tes données
 
@@ -52,6 +58,8 @@ Tout reste sur ton iPhone. ValShop ne parle qu'à :
 - **HenrikDev** : tes parties, avec ta clé ;
 - **valorant-api.com** : les noms et les images du jeu ;
 - **GitHub** : une fois par jour au plus, ValShop lit le numéro de la dernière version publiée ici ; rien n'est envoyé.
+
+À l'ouverture de l'app, ValShop fait ces demandes tout seul : à Riot, ta boutique, quand celle du jour n'a pas encore été lue ; à HenrikDev, l'état des serveurs de Riot et tes nouvelles parties (sauf si une mise à jour, réussie ou non, a eu lieu dans les 30 dernières minutes).
 
 Rien n'est envoyé à la personne qui t'a donné le lien. Le bouton **Envoyer le lien d'installation** (réglages des stats, **Partager ValShop**) n'envoie que l'adresse de ce dépôt : ni tes stats, ni ta clé, ni ta session.
 
@@ -80,11 +88,10 @@ Rien ne s'installe tout seul : une nouvelle version n'arrive que si tu touches l
 - **La boutique ne s'affiche plus.** Ta session Riot a expiré : touche **Me connecter**.
 - **Clé refusée.** Vérifie qu'elle commence par **HDEV-** et qu'elle est entière ; sinon crée-en une nouvelle sur le tableau de bord de HenrikDev, puis **Coller ma clé** dans les réglages des stats.
 - **Limite atteinte.** HenrikDev limite le nombre de requêtes par clé : attends quelques minutes, puis touche de nouveau **Mettre à jour**.
-- **Il manque mes vieilles parties.** HenrikDev ne garde que tes parties récentes (une centaine environ) : fais une mise à jour au moins toutes les deux semaines pour ne rien perdre.
+- **Il manque mes vieilles parties.** HenrikDev ne garde que tes parties récentes (une centaine environ) : ce qui était plus ancien le jour de ta première collecte ne peut pas être récupéré. Depuis, ValShop garde chaque partie qu'il récupère : ouvre l'app au moins toutes les deux semaines pour ne rien perdre.
+- **Ma dernière partie n'apparaît pas.** À l'ouverture, ValShop ne redemande tes parties que si la dernière mise à jour, réussie ou non, a plus de 30 minutes, et il lui faut une dizaine de secondes, l'app ouverte : touche **Mettre à jour** dans l'onglet **Stats** pour l'avoir tout de suite.
 - **Le widget.** Sur l'écran d'accueil, ajoute un widget **Scripting**, puis choisis le script **valshop-s0** dans ses réglages.
 - **Sans Scripting Pro.** ValShop marche sans l'abonnement : il range alors tes parties dans des fichiers, un peu plus lentement.
-
-<!-- Soutien : emplacement réservé pour un lien de soutien (dons libres). À remplir seulement quand ce choix sera fait ; rien pour l'instant. -->
 
 ## Mentions
 

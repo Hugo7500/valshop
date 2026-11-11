@@ -9,6 +9,8 @@ import { ANNONCE_MS, nombreDeParties } from "./historique"
 // un import fini (suiviApres) ; ce que montre la section, que la feuille ne fait qu'afficher (vueHistoriqueAvant) ; quand
 // elle change d'elle-même, pour la minuterie de l'onglet (echeanceHistoriqueAvant) ; ce que dit VoiceOver à la fin
 // (annonceImport), Scripting n'ayant aucune annonce : la valeur du Bouton principal, comme le bilan de Mettre à jour.
+// Entrée 10 de epic-installation-ami : si la section se montre (historiqueAvantMontre) : jamais tant qu'aucun fichier d'import
+// n'est connu, un nouvel utilisateur ne pouvant pas en fabriquer un.
 //
 // Module pur : aucun import de « scripting », aucune lecture de fichier ; types seuls de importation.ts et parties.ts,
 // valeurs de historique.ts (sous node, tests/resoudre-ts.ts). Les dates en toutes lettres sont celles de recap.ts
@@ -260,6 +262,32 @@ export function vueHistoriqueAvant(s: SuiviImport, maintenant: number, miseAJour
     return { phrase, lecture: false, bouton: { inactif, enCours: false, valeur: annonce, raison: miseAJour ? RAISON_MISE_A_JOUR : null }, note: true, message }
   }
   return { phrase, lecture: false, bouton: bilanSeul, note: false, message }
+}
+
+/**
+ * Aucun fichier d'import n'est connu d'après le dernier état lu : rien de lu encore, fichier absent, iCloud Drive désactivé
+ * pour Scripting ou aucun compte (trouver d'importation.ts s'arrête là avant de chercher le fichier). Les autres états ont vu
+ * un fichier (prêt, interrompu, refusé, à télécharger, semaine illisible), ou disent un import en cours ou fait. Seul
+ * « illisible » (`lecture`) ne le garantit pas : c'est le plus souvent un fichier présent que l'hôte ne lit pas, mais aussi
+ * toute erreur de l'hôte levée avant de savoir si un fichier existe ; il reste montré, pour ne pas cacher une panne à qui a
+ * déposé un fichier (choix du plan de l'entrée 10 de epic-installation-ami).
+ */
+function sansFichierConnu(e: EtatHistoriqueAvant | null): boolean {
+  return e === null || e.etat === "absent" || (e.etat === "indisponible" && (e.cause === "icloud" || e.cause === "compte"))
+}
+
+/**
+ * La section se montre-t-elle, à `maintenant` (entrée 10 de epic-installation-ami) ? Non tant qu'aucun fichier d'import n'est
+ * connu (sansFichierConnu), lecture de l'état en cours comprise : un nouvel utilisateur, qui ne peut pas fabriquer ce fichier,
+ * n'en lit rien, ni titre, ni phrase, ni indicateur. Oui dès qu'un fichier est connu, pendant sa relecture aussi ; pendant un
+ * import ; une fois fait ; et, quel que soit l'état, tant que le bilan d'un appui se dit ou que son message reste (ils
+ * répondent à un appui sur le bouton). La feuille ajoute alors la section à l'arbre, ou l'en retire.
+ */
+export function historiqueAvantMontre(s: SuiviImport, maintenant: number): boolean {
+  if (s.enCours) return true
+  if (s.bilan !== null && maintenant < s.bilan.fin) return true
+  if (messageArret(s.arret, maintenant) !== null) return true
+  return !sansFichierConnu(s.etat)
 }
 
 /**

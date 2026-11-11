@@ -5,9 +5,9 @@ import { LIEN_CLE } from "./cle"
 import type { ChoixVue } from "./vue"
 
 // Premier lancement (EXPERIENCE.md, Information Architecture, Component Patterns « Étape de
-// démarrage », Flow 7 ; maquette Premier-lancement, sans ses chiffres d'exemple ; sa carte
-// « Facultatif » depuis l'entrée 5 de epic-stats-import : l'import tracker.gg en simple
-// mention, qui se fait depuis la feuille Réglages des stats) : ce que montre l'onglet Stats (app.tsx) à la place de sa rangée, de ses
+// démarrage », Flow 7 ; maquette Premier-lancement, sans ses chiffres d'exemple, ni sa carte
+// « Facultatif », retirée à l'entrée 10 de epic-installation-ami : elle invitait à importer un historique tracker.gg, dont un
+// nouvel utilisateur ne peut pas fabriquer le fichier) : ce que montre l'onglet Stats (app.tsx) à la place de sa rangée, de ses
 // Bandeaux d'alerte et de sa phrase dès que la clé HenrikDev manque, à l'ouverture de l'app
 // ou à la fermeture de la feuille « Réglages des stats », et, clé collée, jusqu'à l'appui sur
 // l'étape 3. Bienvenue, puis trois Étapes de démarrage dans un ordre fixe : compte Riot, clé
@@ -30,9 +30,6 @@ const FILET_ETAPE = 4
 const CARRE_ETAPE = 32
 /** ✓ ou numéro du carré : callout en 800 (16 à la taille par défaut), qui suit la taille du texte. */
 const MARQUE_ETAPE = { font: "callout", fontWeight: "heavy" } as const
-
-/** La mention de l'import tracker.gg, sous les étapes (maquette Premier-lancement, carte « Facultatif » ; entrée 5 de epic-stats-import). */
-const FACULTATIF = "Tu as un historique tracker.gg ? Tu pourras l'importer depuis les réglages des stats."
 
 
 
@@ -107,9 +104,8 @@ function CarteEtape({ numero, etat, etape, lien, c }: {
 /**
  * Le Premier lancement, dans la page de l'onglet Stats : Bienvenue (bloc `surface`, titre en
  * `titre-section`, en capitales, annoncé comme en-tête, puis la phrase en `corps`
- * `texte-doux`), puis les trois Étapes de démarrage, puis la carte « Facultatif » (bloc
- * `surface` comme Bienvenue, titre en `titre-bloc`, en capitales, annoncé comme en-tête, puis
- * la mention de l'import tracker.gg en `corps` `texte-doux`, sans bouton), 14 entre chaque bloc. `compte` : un compte
+ * `texte-doux`), puis les trois Étapes de démarrage, 14 entre chaque bloc ; rien d'autre : aucune
+ * mention de l'import tracker.gg (entrée 10 de epic-installation-ami). `compte` : un compte
  * Riot connu (étape 1 faite) ; `cle` : la clé au trousseau (étape 2 faite) ; l'étape 3 n'est
  * jamais faite ici, son appui quittant l'écran. `onColler`, `onRecuperer` : les Boutons
  * principaux des étapes 2 et 3 ; celui de l'étape 1 ferme l'app sur « connexion ».
@@ -160,20 +156,6 @@ export function PremierLancement({ compte, cle, onColler, onRecuperer, palette: 
           c={c}
         />
       ))}
-      <VStack
-        alignment="leading"
-        spacing={ESPACES.dansBloc}
-        padding={ESPACES.bloc}
-        frame={{ maxWidth: "infinity", alignment: "leading" }}
-        background={c.surface}
-      >
-        <Text {...policeCondensee(TYPO.titreBloc)} foregroundStyle={c.texte} accessibilityAddTraits="isHeader">
-          Facultatif
-        </Text>
-        <Text {...TYPO.corps} foregroundStyle={c.texteDoux}>
-          {FACULTATIF}
-        </Text>
-      </VStack>
     </VStack>
   )
 }
