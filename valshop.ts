@@ -639,13 +639,16 @@ type Catalogue = {
 /**
  * Télécharge une icône une seule fois : le widget l'affiche depuis le disque. Ticket 7.8 (F3) : seulement pour un id UUID (le
  * nom du fichier, jamais un chemin), une adresse de media.valorant-api.com (securite.ts, imageAdmise) et une image d'au plus
- * BORNE_IMAGE octets (taille annoncée, puis lue) ; sinon null, rien d'écrit.
+ * BORNE_IMAGE octets (taille annoncée, puis lue) ; sinon null, rien d'écrit. Entrée 16 de epic-boutique-visuels : rend le
+ * chemin de l'icône relatif au dossier partagé (`icons/<id>.png`), que shop.json garde : ce dossier change à une
+ * réinstallation ou à une restauration, et un chemin entier n'y mènerait plus (les lecteurs : iconeLisible, securite.ts).
  */
 async function cacheIcon(id: string, url: string | null, j: Jeton): Promise<string | null> {
   if (!url || !estUuid(id) || !imageAdmise(url)) return null
-  const path = `${ICONS}/${id}.png`
+  const relatif = `icons/${id}.png`
+  const path = `${DIR}/${relatif}`
   try {
-    if (FileManager.existsSync(path)) return path
+    if (FileManager.existsSync(path)) return relatif
     if (!FileManager.existsSync(ICONS)) await FileManager.createDirectory(ICONS, true)
     const r = await requete(j, url, { timeout: 20 })
     if (!r.ok) return null
@@ -658,7 +661,7 @@ async function cacheIcon(id: string, url: string | null, j: Jeton): Promise<stri
     if (!tailleAdmise(octets?.size, BORNE_IMAGE)) return null
     if (!(await encore(j))) return null
     await FileManager.writeAsData(path, octets)
-    return path
+    return relatif
   } catch {
     return null
   }

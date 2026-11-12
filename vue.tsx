@@ -16,7 +16,7 @@ import { jusquAu, libelleType, type ObjetBundle } from "./fiches"
 import { boutiqueExpiree, type IssueLecture } from "./garde-fou"
 import { delaiEnClair } from "./historique"
 import { CATALOG, SHOP_FILE, WISHLIST_FILE, lireBoutique, loadCookies, note } from "./valshop"
-import { imageAdmise } from "./securite"
+import { iconeLisible } from "./securite"
 
 // Onglet Boutique de l'app (app.tsx), ouverte par un appui sur le widget (`?ouvrir=vue`,
 // ou `?ouvrir=connexion` après le login) ou par le lancement du script sans paramètre : la
@@ -258,12 +258,15 @@ function heure(iso: string): string {
  * encore, s'afficherait quand même.
  */
 function Visuel({ icon }: { icon: string | null }) {
-  // Ticket 7.8 (F3) : une adresse web seulement de media.valorant-api.com (securite.ts) ; toute autre, l'emplacement vide.
-  if (typeof icon !== "string" || !icon || (icon.startsWith("http") && !imageAdmise(icon))) return <Rectangle fill="clear" frame={CADRE} />
-  return icon.startsWith("http") ? (
-    <Image imageUrl={icon} resizable scaleToFit frame={CADRE} />
+  // Ticket 7.8 (F3) : une adresse web seulement de media.valorant-api.com ; entrée 16 de epic-boutique-visuels : un chemin
+  // local, par son seul nom de fichier, dans `icons/` du dossier partagé d'aujourd'hui (securite.ts, iconeLisible) ; sinon
+  // l'emplacement vide.
+  const icone = iconeLisible(icon, FileManager.appGroupDocumentsDirectory)
+  if (icone === null) return <Rectangle fill="clear" frame={CADRE} />
+  return icone.startsWith("http") ? (
+    <Image imageUrl={icone} resizable scaleToFit frame={CADRE} />
   ) : (
-    <Image filePath={icon} resizable scaleToFit frame={CADRE} />
+    <Image filePath={icone} resizable scaleToFit frame={CADRE} />
   )
 }
 

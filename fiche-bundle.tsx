@@ -7,7 +7,7 @@ import { FicheAccessoire } from "./fiche-accessoire"
 import { FicheSkin } from "./fiche-skin"
 import { jusquAu, libelleType, objetsDuBundle, separerNom, type ObjetAffiche } from "./fiches"
 import { CATALOG } from "./valshop"
-import { imageAdmise } from "./securite"
+import { iconeLisible, imageAdmise } from "./securite"
 
 // Fiche d'un bundle (CAP-25, entrée 3 de epic-boutique-visuels), poussée dans la pile de l'onglet Boutique (vue.tsx) par
 // un appui sur un bundle en vedette. Ouverte par le bundle tel que le range shop.json (nom, icône en cache, prix, fin,
@@ -53,12 +53,14 @@ function prixDit(prix: number | null): string {
  * permet encore, s'afficherait quand même) ; sans icône, « Image indisponible ».
  */
 function GrandeImage({ icon }: { icon: string | null }) {
-  // Ticket 7.8 (F3) : une adresse web seulement de media.valorant-api.com (securite.ts).
-  if (typeof icon !== "string" || !icon || (icon.startsWith("http") && !imageAdmise(icon))) return <Text foregroundStyle="secondaryLabel">Image indisponible</Text>
-  return icon.startsWith("http") ? (
-    <Image imageUrl={icon} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
+  // Ticket 7.8 (F3) : une adresse web seulement de media.valorant-api.com ; entrée 16 de epic-boutique-visuels : un chemin
+  // local, par son seul nom de fichier, dans `icons/` du dossier partagé d'aujourd'hui (securite.ts, iconeLisible).
+  const icone = iconeLisible(icon, FileManager.appGroupDocumentsDirectory)
+  if (icone === null) return <Text foregroundStyle="secondaryLabel">Image indisponible</Text>
+  return icone.startsWith("http") ? (
+    <Image imageUrl={icone} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
   ) : (
-    <Image filePath={icon} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
+    <Image filePath={icone} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
   )
 }
 

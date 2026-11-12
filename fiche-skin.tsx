@@ -6,7 +6,7 @@ import { COULEURS } from "./design"
 import { libelleVariante, lireFicheSkin, separerNom, type NiveauDeSkin } from "./fiches"
 import { catalogueAReconstruire, type Variante } from "./souhaits"
 import { CATALOG } from "./valshop"
-import { imageAdmise, videoAdmise } from "./securite"
+import { iconeLisible, imageAdmise, videoAdmise } from "./securite"
 
 
 
@@ -228,12 +228,14 @@ function GrandeImage({ adresse, repli, onEchec }: {
       />
     )
   }
-  if (!repli || (repli.startsWith("http") && !imageAdmise(repli))) return <Text foregroundStyle="secondaryLabel">Image indisponible</Text>
   // Le moteur n'écrit que des chemins locaux ; une adresse web, que le contrat permet encore, s'afficherait quand même.
-  return repli.startsWith("http") ? (
-    <Image imageUrl={repli} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
+  // Entrée 16 de epic-boutique-visuels : le chemin local, par son seul nom de fichier (securite.ts, iconeLisible).
+  const icone = iconeLisible(repli, FileManager.appGroupDocumentsDirectory)
+  if (icone === null) return <Text foregroundStyle="secondaryLabel">Image indisponible</Text>
+  return icone.startsWith("http") ? (
+    <Image imageUrl={icone} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
   ) : (
-    <Image filePath={repli} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
+    <Image filePath={icone} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_IMAGE, maxHeight: HAUTEUR_IMAGE }} />
   )
 }
 

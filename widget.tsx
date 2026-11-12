@@ -4,7 +4,7 @@ import {
 import { RefreshShop } from "./app_intents"
 import { deciderLecture, sessionExpiree } from "./garde-fou"
 import { ETAT_FILE, SHOP_FILE } from "./valshop"
-import { imageAdmise } from "./securite"
+import { iconeLisible } from "./securite"
 
 // Le widget ne va JAMAIS sur le réseau de lui-même et n'écrit rien : il lit shop.json,
 // etat.json et les icônes que la dernière mise à jour a mises en cache, et offre un
@@ -81,18 +81,19 @@ function remaining(iso: string | null): string {
 }
 
 function Visuel({ item, dense }: { item: Item; dense: boolean }) {
-  if (typeof item.icon !== "string" || !item.icon) return null
-  // Ticket 7.8 (F3) : une adresse web seulement de media.valorant-api.com (securite.ts) ; toute autre, rien.
-  if (item.icon.startsWith("http") && !imageAdmise(item.icon)) return null
+  // Ticket 7.8 (F3) : une adresse web seulement de media.valorant-api.com ; entrée 16 de epic-boutique-visuels : un chemin
+  // local, par son seul nom de fichier, dans `icons/` du dossier partagé d'aujourd'hui (securite.ts, iconeLisible) ; sinon rien.
+  const icone = iconeLisible(item.icon, FileManager.appGroupDocumentsDirectory)
+  if (icone === null) return null
   // Largeur FIXE, et surtout jamais "infinity" : une image redimensionnable
   // sans borne réclame toute la place disponible et fait déborder la rangée.
   const cadre = dense ? { width: 52, height: 22 } : { width: 68, height: 30 }
   // Le moteur n'écrit que le chemin de l'icône en cache, ou null ; une adresse web,
   // que le contrat permet encore, s'afficherait quand même, depuis le réseau.
-  return item.icon.startsWith("http") ? (
-    <Image imageUrl={item.icon} resizable scaleToFit frame={cadre} />
+  return icone.startsWith("http") ? (
+    <Image imageUrl={icone} resizable scaleToFit frame={cadre} />
   ) : (
-    <Image filePath={item.icon} resizable scaleToFit frame={cadre} />
+    <Image filePath={icone} resizable scaleToFit frame={cadre} />
   )
 }
 

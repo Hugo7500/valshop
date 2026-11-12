@@ -2,7 +2,7 @@ import { Image, LabeledContent, List, ProgressView, Section, Text, VStack, useSt
 import { COULEURS } from "./design"
 import { libelleType, lireAccessoire } from "./fiches"
 import { CATALOG } from "./valshop"
-import { imageAdmise } from "./securite"
+import { iconeLisible, imageAdmise } from "./securite"
 
 
 
@@ -55,17 +55,19 @@ function Visuel({ adresse, repli, onEchec }: {
       />
     )
   }
-  if (!repli || (repli.startsWith("http") && !imageAdmise(repli))) return <Text foregroundStyle="secondaryLabel">Image indisponible</Text>
-  return repli.startsWith("http") ? (
+  // Entrée 16 de epic-boutique-visuels : le chemin local, par son seul nom de fichier (securite.ts, iconeLisible).
+  const icone = iconeLisible(repli, FileManager.appGroupDocumentsDirectory)
+  if (icone === null) return <Text foregroundStyle="secondaryLabel">Image indisponible</Text>
+  return icone.startsWith("http") ? (
     <Image
-      imageUrl={repli}
+      imageUrl={icone}
       resizable
       scaleToFit
       frame={{ maxWidth: "infinity", minHeight: HAUTEUR_VISUEL, maxHeight: HAUTEUR_VISUEL }}
-      onError={() => onEchec(repli)}
+      onError={() => onEchec(icone)}
     />
   ) : (
-    <Image filePath={repli} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_VISUEL, maxHeight: HAUTEUR_VISUEL }} />
+    <Image filePath={icone} resizable scaleToFit frame={{ maxWidth: "infinity", minHeight: HAUTEUR_VISUEL, maxHeight: HAUTEUR_VISUEL }} />
   )
 }
 

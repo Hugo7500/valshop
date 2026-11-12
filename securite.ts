@@ -78,6 +78,24 @@ export function imageAdmise(adresse: unknown): adresse is string {
   return typeof adresse === "string" && /^https:\/\/media\.valorant-api\.com\/[A-Za-z0-9._~%\/-]+$/.test(adresse) && !/\.\.|%2e/i.test(adresse)
 }
 
+/** Le nom d'un fichier d'icône : un seul segment fait de chiffres, de lettres et de tirets, en `.png` (la forme de stockage.ts). */
+const NOM_ICONE = /^[0-9a-z][0-9a-z-]*\.png$/i
+
+/**
+ * Entrée 16 de epic-boutique-visuels : ce qu'un écran affiche pour l'`icon` d'une offre de shop.json, ou null (rien à
+ * montrer). Une adresse web : elle-même, si elle est admise (imageAdmise). Un chemin local : le fichier de ce nom dans
+ * `icons/` du dossier partagé d'aujourd'hui (`groupe`), que shop.json dise `icons/<id>.png` (ce qu'écrit le moteur) ou le
+ * chemin entier d'un dossier d'avant : ce dossier change à une réinstallation de Scripting, à une restauration ou sur un
+ * autre iPhone, et les images suivent. Seul le nom de fichier est gardé, de la forme des icônes : jamais un chemin lu dans
+ * le fichier n'est ouvert tel quel, ni un fichier hors de `icons/`.
+ */
+export function iconeLisible(icon: unknown, groupe: string): string | null {
+  if (typeof icon !== "string" || icon === "") return null
+  if (icon.startsWith("http")) return imageAdmise(icon) ? icon : null
+  const nom = icon.slice(icon.lastIndexOf("/") + 1)
+  return NOM_ICONE.test(nom) ? `${groupe}/icons/${nom}` : null
+}
+
 /** Une vidéo de skin admise (fiche du skin) : https sur valorant.dyn.riotcdn.net, le CDN de Riot que cite valorant-api, seulement. */
 export function videoAdmise(adresse: unknown): adresse is string {
   return typeof adresse === "string" && /^https:\/\/valorant\.dyn\.riotcdn\.net\/[A-Za-z0-9._~%\/-]+$/.test(adresse) && !/\.\.|%2e/i.test(adresse)
