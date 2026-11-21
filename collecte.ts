@@ -2,7 +2,8 @@ import { AbortSignal, AppEvents, Script, fetch } from "scripting"
 import { etapesDesParties, lignesRrLues, premiereLecture, synchroniser, type Base, type BilanIndex, type EtapeLecture, type Ligne } from "./base"
 import { lireCle } from "./cle"
 import {
-  LIGNE_DEJA, LIGNE_DEJA_RAFRAICHIR, LIGNE_SANS_CLE, LIGNE_SANS_COMPTE, annoncesRiot, attenteRestante, classerStatut, deciderMajAuto, delaiLimite,
+  CODES_COMPTE_INCONNU, CODE_SANS_CLASSEMENT, DETAIL_COMPTE_INCONNU, LIGNE_DEJA, LIGNE_DEJA_RAFRAICHIR, LIGNE_SANS_CLE, LIGNE_SANS_COMPTE, annoncesRiot, attenteRestante,
+  classerStatut, codeErreur, deciderMajAuto, delaiLimite,
   fusionnerRr, ligneArretee, lignesRr, lireQuota, messageHote, metaRemiseAZero, nouvelEchec, puuidDesCookies, quotaEpuise,
   rangDepuisMmr, regionDeBoutique, suiteDeLigne, texteBandeauRiot, texteEchec, texteLigne, type DecisionMajAuto, type Identite, type LigneRr, type Meta,
   type Quota, type Rang, type Reprise, type ResultatMiseAJour, type RiotId, type TypeEchec,
@@ -105,6 +106,8 @@ const HENRIKDEV = "https://api.henrikdev.xyz"
 const PLATEFORME = "pc"
 /** Délai d'une requête, en secondes. */
 const DELAI_REQUETE = 20
+/** Borne du corps d'une réponse 404 de HenrikDev, où se lit son code d'erreur : quelques lignes de JSON. */
+const BORNE_ERREUR = 64 * 1024
 /** Délai d'une page de la liste v4, en secondes : HenrikDev peut devoir demander ses dix parties à Riot. */
 const DELAI_PAGE = 90
 /** Rôles des agents jouables sur valorant-api, libellés anglais (sa langue par défaut). */
@@ -225,7 +228,7 @@ export function historiqueConnecte(): { parties: Partie[]; illisibles: number } 
  */
 type Lecture =
   | { ok: true; valeur: unknown; quota: Quota }
-  | { ok: false; type: TypeEchec; detail: string; delai: number | null; coupee: boolean; quota?: Quota }
+  | { ok: false; type: TypeEchec; detail: string; delai: number | null; coupee: boolean; quota?: Quota; code?: number | null }
 
 /**
  * Le signal d'une requête de ↻ (entrée 6) : borne totale, corps compris, qui la coupe à l'échéance
@@ -237,14 +240,20 @@ function signalAvant(echeance: number | null): { signal?: AbortSignal } {
   return echeance === null ? {} : { signal: AbortSignal.timeout(Math.max(0, echeance - Date.now())) }
 }
 
+/** Le détail d'une lecture en échec ; un 404 dont le code dit que HenrikDev ne connaît pas le compte le dit en clair. */
+function detailDe(lu: { detail: string; code?: number | null }): string {
+  return lu.code != null && CODES_COMPTE_INCONNU.includes(lu.code) ? `${lu.detail} : ${DETAIL_COMPTE_INCONNU}` : lu.detail
+}
+
 /**
  * Une requête GET à HenrikDev, la clé dans l'en-tête `Authorization`, jamais dans
  * l'adresse ; aucun nouvel essai ; aucune redirection suivie (la clé ne part vers aucun
  * autre hôte) : la réponse 3xx compte comme une panne. Le texte d'une erreur réseau passe
  * par `sansIdentifiant`. `delai` : en secondes, 20 par défaut (borné par l'échéance pour ↻) ;
- * `echeance` (↻) : la requête entière, corps compris, coupée à cette heure (signalAvant).
+ * `echeance` (↻) : la requête entière, corps compris, coupée à cette heure (signalAvant). `avecCode` : le code d'erreur d'un
+ * 404 est lu dans son corps.
  */
-async function lire(etape: string, chemin: string, cle: string, secrets: string[], delai: number = DELAI_REQUETE, echeance: number | null = null): Promise<Lecture> {
+async function lire(etape: string, chemin: string, cle: string, secrets: string[], delai: number = DELAI_REQUETE, echeance: number | null = null, avecCode: boolean = false): Promise<Lecture> {
   let res: Awaited<ReturnType<typeof fetch>>
   try {
     res = await fetch(HENRIKDEV + chemin, {
@@ -260,9 +269,18 @@ async function lire(etape: string, chemin: string, cle: string, secrets: string[
   const enTete = (nom: string) => res.headers.get(nom)
   const type = classerStatut(res.status)
   if (type) {
+    // Un 404 de HenrikDev porte un code d'erreur dans son corps (historique.ts, codeErreur) : « pas de classement », « compte
+    // inconnu »… Lu seulement là où il change la suite (`avecCode` : le rang, les pages), borné, sans jamais faire échouer
+    // davantage : illisible, il vaut null. Ailleurs, un statut hors 2xx laisse le corps non lu.
+    let code: number | null = null
+    if (avecCode && res.status === 404) {
+      try {
+        code = codeErreur(JSON.parse(await texteBorne(res, BORNE_ERREUR)))
+      } catch { /* corps absent, trop grand ou illisible : pas de code */ }
+    }
     return {
-      ok: false, type, detail: `${etape} HTTP ${res.status}`, delai: type === "limite" ? delaiLimite(enTete, Date.now()) : null, coupee: false,
-      quota: lireQuota(enTete),
+      ok: false, type, detail: `${etape} HTTP ${res.status}${code !== null ? ` (code ${code})` : ""}`, delai: type === "limite" ? delaiLimite(enTete, Date.now()) : null, coupee: false,
+      quota: lireQuota(enTete), code,
     }
   }
   const quota = lireQuota(enTete)
@@ -1020,10 +1038,10 @@ async function lirePages(k: Collecte): Promise<{ arret: Bilan } | { arret: null;
     const departPage = Date.now()
     k.c.henrikdev++
     const page = await lire(`page ${numero} v4`, `/valorant/v4/by-puuid/matches/${k.compte}?size=${TAILLE_PAGE}&start=${start}`,
-      k.cle, k.secrets, delai, echeance)
+      k.cle, k.secrets, delai, echeance, true)
     if (!page.ok) {
       if (coupeeParEcheance(page, k.rafraichir)) return { arret: await interrompre(k.rafraichir, k.m, `pendant la page ${numero}`, k.c) }
-      return { arret: await arreter(k, page.type, page.detail, page.delai) }
+      return { arret: await arreter(k, page.type, detailDe(page), page.delai) }
     }
     k.precedente = { depart: departPage, reponse: Date.now(), quota: page.quota }
     rafraichirMarqueur(k.debut, Date.now())
@@ -1395,42 +1413,53 @@ export async function mettreAJour(avancee?: Avancee, rafraichir: Rafraichir | nu
     rafraichirMarqueur(debut, Date.now())
     const delaiMmr = delaiBorne(DELAI_REQUETE, Date.now(), echeance)
     if (delaiMmr === null) return await interrompre(rafraichir, m, "avant mmr v3", null)
-    const mmr = await lire("mmr v3", `/valorant/v3/by-puuid/mmr/${compteAdresse}`, cle, secrets, delaiMmr, echeance)
+    const mmr = await lire("mmr v3", `/valorant/v3/by-puuid/mmr/${compteAdresse}`, cle, secrets, delaiMmr, echeance, true)
+    // La requête d'avant la première page : son départ, sa réponse, son quota (l'attente avant la page 1 en part).
+    let precedente: Precedente
     if (!mmr.ok) {
       if (coupeeParEcheance(mmr, rafraichir)) return await interrompre(rafraichir, m, "pendant mmr v3", null)
-      return await echouer(m, mmr.type, mmr.detail, mmr.delai)
-    }
-    const rang = rangDepuisMmr(mmr.valeur, Date.now())
-    if (!rang) return await echouer(m, "panne", "mmr v3 : réponse inattendue", null)
-    if (quotaEpuise(mmr.quota)) {
-      return await echouer(m, "limite", `quota épuisé avant mmr-history v2 (${quotaEnClair(mmr.quota)})`, mmr.quota.reset)
-    }
+      // HenrikDev a répondu « pas de classement pour ce compte » (404, code 25 : un compte jamais classé) : ce n'est pas une
+      // panne. Ni rang ni RR ne sont lus ni écrits (ceux déjà gardés restent), et la mise à jour continue avec les parties.
+      if (!(mmr.type === "panne" && mmr.code === CODE_SANS_CLASSEMENT)) return await echouer(m, mmr.type, detailDe(mmr), mmr.delai)
+      const quota: Quota = mmr.quota ?? { restant: null, limite: null, reset: null }
+      const ici = Date.now()
+      precedente = { depart: ici, reponse: ici, quota }
+      await note(`stats : HenrikDev n'a pas de classement pour ce compte (${mmr.detail}) : ni rang ni RR, la mise à jour continue ; `
+        + `quota restant ${quotaEnClair(quota)}.`)
+    } else {
+      const rang = rangDepuisMmr(mmr.valeur, Date.now())
+      if (!rang) return await echouer(m, "panne", "mmr v3 : réponse inattendue", null)
+      if (quotaEpuise(mmr.quota)) {
+        return await echouer(m, "limite", `quota épuisé avant mmr-history v2 (${quotaEnClair(mmr.quota)})`, mmr.quota.reset)
+      }
 
-    rafraichirMarqueur(debut, Date.now())
-    const delaiHistorique = delaiBorne(DELAI_REQUETE, Date.now(), echeance)
-    if (delaiHistorique === null) return await interrompre(rafraichir, m, "avant mmr-history v2", null)
-    const departHistorique = Date.now()
-    const historique = await lire("mmr-history v2", `/valorant/v2/by-puuid/mmr-history/${compteAdresse}`, cle, secrets, delaiHistorique, echeance)
-    if (!historique.ok) {
-      if (coupeeParEcheance(historique, rafraichir)) return await interrompre(rafraichir, m, "pendant mmr-history v2", null)
-      return await echouer(m, historique.type, historique.detail, historique.delai)
-    }
-    const reponseHistorique = Date.now()
-    const lues = lignesRr(historique.valeur)
-    if (!lues) return await echouer(m, "panne", "mmr-history v2 : réponse inattendue", null)
+      rafraichirMarqueur(debut, Date.now())
+      const delaiHistorique = delaiBorne(DELAI_REQUETE, Date.now(), echeance)
+      if (delaiHistorique === null) return await interrompre(rafraichir, m, "avant mmr-history v2", null)
+      const departHistorique = Date.now()
+      const historique = await lire("mmr-history v2", `/valorant/v2/by-puuid/mmr-history/${compteAdresse}`, cle, secrets, delaiHistorique, echeance)
+      if (!historique.ok) {
+        if (coupeeParEcheance(historique, rafraichir)) return await interrompre(rafraichir, m, "pendant mmr-history v2", null)
+        return await echouer(m, historique.type, historique.detail, historique.delai)
+      }
+      const reponseHistorique = Date.now()
+      const lues = lignesRr(historique.valeur)
+      if (!lues) return await echouer(m, "panne", "mmr-history v2 : réponse inattendue", null)
 
-    const { lignes, nouvelles } = fusionnerRr(table.lignes, lues.lignes)
-    try {
-      if (nouvelles.length > 0) ecrireRr(id.puuid, lignes)
-      ecrireRang(id.puuid, rang)
-    } catch (e) {
-      return await echouer(m, "stockage", "écriture impossible (" + sansIdentifiant(e, secrets) + ")", null)
+      const { lignes, nouvelles } = fusionnerRr(table.lignes, lues.lignes)
+      try {
+        if (nouvelles.length > 0) ecrireRr(id.puuid, lignes)
+        ecrireRang(id.puuid, rang)
+      } catch (e) {
+        return await echouer(m, "stockage", "écriture impossible (" + sansIdentifiant(e, secrets) + ")", null)
+      }
+      const palier = rang.current.tier?.name ?? "inconnu"
+      const ignorees = lues.ignorees > 0 ? `, ${lues.ignorees} sans match_id ignorés` : ""
+      await note(`stats : rang ${palier}, ${rang.current.rr ?? "?"} RR ; RR : ${lues.lignes.length} lus, `
+        + `${nouvelles.length} nouveaux${ignorees}, ${lignes.length} gardés ; quota restant ${quotaEnClair(mmr.quota)} `
+        + `puis ${quotaEnClair(historique.quota)}.`)
+      precedente = { depart: departHistorique, reponse: reponseHistorique, quota: historique.quota }
     }
-    const palier = rang.current.tier?.name ?? "inconnu"
-    const ignorees = lues.ignorees > 0 ? `, ${lues.ignorees} sans match_id ignorés` : ""
-    await note(`stats : rang ${palier}, ${rang.current.rr ?? "?"} RR ; RR : ${lues.lignes.length} lus, `
-      + `${nouvelles.length} nouveaux${ignorees}, ${lignes.length} gardés ; quota restant ${quotaEnClair(mmr.quota)} `
-      + `puis ${quotaEnClair(historique.quota)}.`)
 
     // ── rôles des agents : catalog.json, sinon valorant-api ; sans eux, aucune page ──
     let valorantApi = 0
@@ -1468,7 +1497,7 @@ export async function mettreAJour(avancee?: Avancee, rafraichir: Rafraichir | nu
     // ── pages ──
     const k: Collecte = {
       id, cle, secrets, compte: compteAdresse, debut, m: meta, roles, relus: false, riotIdVu: false, ici: new Set(),
-      precedente: { depart: departHistorique, reponse: reponseHistorique, quota: historique.quota },
+      precedente,
       avancee, rafraichir,
       c: {
         henrikdev: 2, valorantApi, pages: 0, lues: 0, ajoutees: 0, dejaGardees: 0, ecartees: 0, refusees: 0,

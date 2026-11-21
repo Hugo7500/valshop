@@ -1,7 +1,7 @@
 import {
   BarChart, Button, Canvas, Chart, Circle, DatePicker, EmptyView, EnvironmentValuesReader, FlowLayout, Grid, GridRow, HStack, Image, LazyVStack,
   LineCategoryChart, LineChart, Link, List, Menu, NavigationStack, PathShape, Picker, ProgressView, RangeAreaChart, Rectangle, RoundedRectangle,
-  RuleLineForValueChart, ScrollView, ScrollViewReader, Section, SecureField, Spacer, Stepper, Text, VStack, ZStack,
+  RuleLineForValueChart, ScrollView, ScrollViewReader, Section, SecureField, Spacer, Stepper, Text, Toggle, VStack, ZStack,
   useEffect as useEffectScripting, useRef as useRefScripting, useState as useStateScripting,
 } from "scripting"
 
@@ -27,7 +27,7 @@ const ELEMENTS: [unknown, string][] = [
   [LineChart, "LineChart"], [Link, "Link"], [Menu, "Menu"], [NavigationStack, "NavigationStack"], [PathShape, "PathShape"],
   [Picker, "Picker"], [ProgressView, "ProgressView"], [RangeAreaChart, "RangeAreaChart"], [Rectangle, "Rectangle"],
   [RoundedRectangle, "RoundedRectangle"], [RuleLineForValueChart, "RuleLineForValueChart"], [ScrollView, "ScrollView"],
-  [ScrollViewReader, "ScrollViewReader"], [Section, "Section"], [SecureField, "SecureField"], [Spacer, "Spacer"], [Stepper, "Stepper"],
+  [ScrollViewReader, "ScrollViewReader"], [Section, "Section"], [SecureField, "SecureField"], [Spacer, "Spacer"], [Stepper, "Stepper"], [Toggle, "Toggle"],
   [Text, "Text"], [VStack, "VStack"], [ZStack, "ZStack"],
 ]
 const NOMS = new Map<unknown, string>(ELEMENTS)

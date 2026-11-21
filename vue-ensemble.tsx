@@ -4,7 +4,7 @@ import {
 } from "scripting"
 import { createElement, Fragment } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import { ESPACES, TYPO, couleurs, policeCondensee, tailleAccessibilite, type Palette } from "./design"
-import { PileDeBlocs } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
+import { PileDeBlocs, fondTuile } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
 import { Constat, couleurEvaluation, titreDeBloc } from "./dessin"
 import {
   TIRET, constatsVueDEnsemble, tuiles as calculerTuiles,
@@ -280,7 +280,7 @@ export function TuileChiffreCle({ tuile, rangee }: { tuile: Tuile; rangee?: read
             spacing={ECART_TUILE}
             padding={ESPACES.cellule}
             frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-            background={c.surface}
+            background={fondTuile(c)}
             accessibilityElement
             accessibilityLabel={phraseTuile(tuile)}
             accessibilityHint={INDICES[tuile.cle]}

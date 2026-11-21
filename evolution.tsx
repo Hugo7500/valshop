@@ -3,9 +3,9 @@ import {
 } from "scripting"
 import { createElement, Fragment, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import { ESPACES, TYPO, couleurs, policeCondensee, tailleAccessibilite, type Palette } from "./design"
-import { PileDeBlocs } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
+import { PileDeBlocs, fondTuile } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
 import {
-  Barres, BarresDeRR, Bloc, CourbeDeuxSeries, EscalierDuRang, Legende, PucesDeChoix, SEGMENTS_PERIODE, SelecteurSegmente, couleurEvaluation,
+  Barres, BarresDeRR, Bloc, CourbeDeuxSeries, EscalierDuRang, Legende, PucesDeChoix, SEGMENTS_PERIODE, SelecteurSegmente, couleurEvaluation, couleurIssue,
   type Barre, type ItemLegende, type Puce,
 } from "./dessin"
 import { MiniCourbe } from "./vue-ensemble"
@@ -389,7 +389,7 @@ function TuileMini({ m, rangee, periode }: { m: MiniEtSens; rangee: readonly Min
             spacing={TUILE_MINI.ecart}
             padding={TUILE_MINI.marge}
             frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-            background={c.surface}
+            background={fondTuile(c)}
             accessibilityElement
             accessibilityLabel={phraseMini(m, periode)}
           >
@@ -694,7 +694,7 @@ function Etiquette({ texte, c, enTete = true }: { texte: string; c: Palette; enT
 }
 
 /** Une ligne en corps : ses morceaux, les valeurs en gras à chasse fixe, `texte` si neutres, sinon de la couleur de leur évaluation. */
-function LigneMorceaux({ morceaux, c, couleur, masquee = false }: { morceaux: readonly Morceau[]; c: Palette; couleur: Color; masquee?: boolean }) {
+function LigneMorceaux({ morceaux, c, couleur, masquee = false, issue = false }: { morceaux: readonly Morceau[]; c: Palette; couleur: Color; masquee?: boolean; issue?: boolean }) {
   return (
     <Text
       styledText={{
@@ -703,7 +703,8 @@ function LigneMorceaux({ morceaux, c, couleur, masquee = false }: { morceaux: re
         foregroundColor: couleur,
         content: morceaux.map((m): string | StyledText => (typeof m === "string" ? m : {
           content: m.valeur, font: TYPO.corps.font, fontWeight: "bold", monospacedDigit: true,
-          foregroundColor: m.evaluation === "neutre" ? c.texte : couleurEvaluation(c, m.evaluation),
+          // `issue` : un gain ou une perte de RR, en vert ou rouge clair, pas une évaluation.
+          foregroundColor: m.evaluation === "neutre" ? c.texte : issue ? couleurIssue(c, m.evaluation) : couleurEvaluation(c, m.evaluation),
         })),
       }}
       accessibilityHidden={masquee ? true : undefined}
@@ -772,7 +773,7 @@ function BlocRr({ rr }: { rr: BarresRr }) {
               </HStack>
             )}
             <BarresDeRR key="barres" barres={rr.barres} phrase={rr.phrase} />
-            {moyennes !== null ? <LigneMorceaux key="moyennes" morceaux={moyennes} c={c} couleur={c.texteDoux} masquee /> : null}
+            {moyennes !== null ? <LigneMorceaux key="moyennes" morceaux={moyennes} c={c} couleur={c.texteDoux} masquee issue /> : null}
             {rembourses !== null ? (
               <Text key="rembourses" {...TYPO.note} foregroundStyle={c.texteDoux} accessibilityHidden>
                 {rembourses}

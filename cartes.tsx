@@ -3,7 +3,7 @@ import {
 } from "scripting"
 import { createElement, Fragment, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import { ESPACES, TYPO, couleurs, policeCondensee, tailleAccessibilite, type Palette } from "./design"
-import { PileDeBlocs } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
+import { PileDeBlocs, creux } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
 import {
   Barres, Bloc, Legende, LignesDetaillees, PlanCarte, PucesDeChoix, REPLIS, SEGMENTS_COTE, SelecteurSegmente, couleurEvaluation,
   sansMauvaiseCoupure, type Barre, type ItemLegende, type LigneDetaillee, type Puce,
@@ -390,7 +390,7 @@ function TuileSite({ site, c }: { site: SitePlante; c: Palette }) {
       spacing={TUILE_SITE.ecart}
       padding={TUILE_SITE.marge}
       frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-      background={c.fond}
+      background={creux(c)}
       accessibilityElement
       accessibilityLabel={voixSite(site)}
     >

@@ -414,25 +414,25 @@ function css(c: CouleursPage): string {
 html{font:-apple-system-body;-webkit-text-size-adjust:100%}
 html,body{margin:0;background:${c.fond};color:${c.texte}}
 body{line-height:1.3;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
-.tete{position:sticky;top:0;z-index:5;background:${c.fond};padding:8px 16px;border-bottom:1px solid ${c.bordure}}
-#q{width:100%;font:inherit;color:${c.texte};background:${c.surface};border:1px solid ${c.bordure};border-radius:10px;padding:9px 12px;-webkit-appearance:none;appearance:none}
+.tete{position:sticky;top:0;z-index:5;background:${c.fond};padding:8px 16px 10px}
+#q{width:100%;font:inherit;color:${c.texte};background:${c.surface};border:1px solid ${c.bordure};border-radius:14px;padding:11px 14px;-webkit-appearance:none;appearance:none}
 #q::placeholder{color:${c.texteDiscret}}
 .puces{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .puces::-webkit-scrollbar{display:none}
-.puce{flex:0 0 auto;font:inherit;font-size:.88em;color:${c.texteDoux};background:${c.surface};border:1px solid ${c.bordure};border-radius:2px;padding:6px 12px;min-height:36px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.puce{flex:0 0 auto;font:inherit;font-size:.88em;color:${c.texteDoux};background:${c.surface};border:0;border-radius:999px;padding:6px 14px;min-height:36px;font-weight:600;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .puce[aria-pressed="true"]{color:${c.fond};background:${c.texte};border-color:${c.texte}}
 #compte{margin:6px 0 0;font-size:.76em;color:${c.texteDiscret}}
 .choix{display:flex;gap:8px;padding-top:6px}
-select{flex:1 1 0;min-width:0;font:inherit;font-size:.88em;color:${c.texte};background:${c.surface};border:1px solid ${c.bordure};border-radius:2px;padding:7px 8px;min-height:36px}
-h2{margin:0;padding:18px 16px 6px;font-size:.76em;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:${c.texteDiscret}}
-ul{list-style:none;margin:0 16px;padding:0;background:${c.surface};border:1px solid ${c.bordure}}
+select{flex:1 1 0;min-width:0;font:inherit;font-size:.88em;color:${c.texte};background:${c.surface};border:0;border-radius:12px;padding:7px 10px;min-height:36px}
+h2{margin:0;padding:20px 16px 8px;font-size:1em;font-weight:800;font-stretch:condensed;letter-spacing:.06em;text-transform:uppercase;color:${c.texte}}
+ul{list-style:none;margin:0 16px;padding:0;background:${c.surface};border-radius:16px;overflow:hidden}
 li+li{border-top:1px solid ${c.bordure}}
 li{content-visibility:auto;contain-intrinsic-size:auto 61px}
 li[hidden],section[hidden],[hidden]{display:none!important}
 .l{display:flex;align-items:center;gap:10px;width:100%;min-height:60px;padding:8px 12px;font:inherit;color:inherit;text-align:left;background:none;border:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .l:active{background:${c.bordure}}
 .l img,.l .sans{flex:0 0 44px;width:44px;height:44px;object-fit:contain}
-.l .sans{display:flex;align-items:center;justify-content:center;font-size:.6em;font-weight:700;color:${c.texteDiscret};border:1px solid ${c.bordure}}
+.l .sans{display:flex;align-items:center;justify-content:center;font-size:.6em;font-weight:700;color:${c.texteDiscret};border:1px solid ${c.bordure};border-radius:8px}
 .t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
 .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .s{font-size:.76em;color:${c.texteDiscret};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -444,12 +444,12 @@ li[hidden],section[hidden],[hidden]{display:none!important}
 .vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 #fiche{padding:8px 16px 24px}
 #retour{font:inherit;color:${c.texte};background:none;border:0;padding:10px 0;min-height:44px;touch-action:manipulation}
-.visuel{display:flex;align-items:center;justify-content:center;min-height:200px;margin:8px 0 12px;background:${c.surface};border:1px solid ${c.bordure}}
+.visuel{display:flex;align-items:center;justify-content:center;min-height:200px;margin:8px 0 12px;background:${c.surface};border-radius:20px}
 #f-img{max-width:100%;max-height:320px;object-fit:contain}
 #f-titre{font-size:1.6em;font-weight:800;text-align:center;padding:24px}
 #f-nom{margin:0;font-size:1.25em;font-weight:700;outline:none}
 .p{color:${c.texteDiscret};margin:2px 0 0;font-size:.88em}
-dl{margin:16px 0 0;background:${c.surface};border:1px solid ${c.bordure}}
+dl{margin:16px 0 0;background:${c.surface};border-radius:16px;overflow:hidden}
 dl div{display:flex;justify-content:space-between;gap:12px;padding:12px}
 dl div+div{border-top:1px solid ${c.bordure}}
 dt{color:${c.texteDoux}}

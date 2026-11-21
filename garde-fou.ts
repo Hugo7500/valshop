@@ -9,6 +9,8 @@
 // Lire et écrire shop.json, verrou.json et etat.json reste le travail de valshop.ts
 // (le widget et l'app lisent shop.json et etat.json, sans jamais les écrire).
 
+import type { IssueSolde } from "./solde"
+
 /**
  * Un verrou sans activité depuis plus longtemps que cela est ignoré : la mise à jour qui l'a posé a
  * planté (l'activité se rafraîchit avant chaque requête ; un verrou d'avant l'entrée 10 : depuis sa pose).
@@ -182,10 +184,12 @@ export function nouveauVerrou(now: number, tenu?: VerrouTenu): string {
  * (`lueA`, updatedAt de shop.json) ; déjà à jour, le garde-fou ayant servi le cache (`resetAt`, le
  * prochain reset) ; déjà en cours ailleurs (`reessai`, ms depuis l'epoch) ; session expirée ;
  * réseau indisponible ; erreur de Riot (`maintenance` : boutique en 403) ; tout autre échec.
+ * Entrée 17 de epic-boutique-visuels : déjà à jour, `solde` dit l'issue de la relecture du seul solde, quand elle a été
+ * demandée (l'appui sur le bouton) ; absent sinon (↻, Raccourcis, lecture automatique de l'ouverture).
  */
 export type IssueLecture =
   | { genre: "lue"; lueA: string | null }
-  | { genre: "a-jour"; resetAt: string | null }
+  | { genre: "a-jour"; resetAt: string | null; solde?: IssueSolde }
   | { genre: "en-cours"; reessai: number }
   | { genre: "session" }
   | { genre: "reseau" }

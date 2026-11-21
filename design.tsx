@@ -23,12 +23,15 @@ export type Palette = {
   fond: Color; surface: Color; bordure: Color; segmentActif: Color
   texte: Color; texteDoux: Color; texteDiscret: Color
   orange: Color; bleu: Color; or: Color; blanc: Color; zonePlan: Color
+
+
+  rouge: Color; vert: Color; rougeClair: Color; surfaceHaute: Color
 }
 
 const STANDARD: Palette = {
-  fond: "#0b0f14",
-  surface: "#161c23",
-  bordure: "#2b3542",
+  fond: "#080b10",
+  surface: "#121821",
+  bordure: "#263040",
   segmentActif: "#5c6b7d",
   texte: "#e8edf2",
   texteDoux: "#c9d3dc",
@@ -38,6 +41,10 @@ const STANDARD: Palette = {
   or: "#ffd166",
   blanc: "#ffffff",
   zonePlan: "#1f2731",
+  rouge: "#ff4655",
+  vert: "#4ade80",
+  rougeClair: "#ff7b84",
+  surfaceHaute: "#222b37",
 }
 
 /**
@@ -47,7 +54,8 @@ const STANDARD: Palette = {
  */
 export const COULEURS: Record<ColorSchemeContrast, Palette> = {
   standard: STANDARD,
-  increased: { ...STANDARD, bordure: STANDARD.segmentActif, texteDiscret: STANDARD.texteDoux },
+  // `rouge` plus sombre : le libellé blanc du Bouton principal y garde 4,5:1.
+  increased: { ...STANDARD, bordure: STANDARD.segmentActif, texteDiscret: STANDARD.texteDoux, rouge: "#d92f41" },
 }
 
 /** Palette du contraste lu par `EnvironmentValuesReader` (`colorSchemeContrast`) ; standard si la valeur manque. */
@@ -55,8 +63,22 @@ export function couleurs(contraste: ColorSchemeContrast | undefined): Palette {
   return contraste === "increased" ? COULEURS.increased : COULEURS.standard
 }
 
-/** Rayons, en points (DESIGN.md, rounded) : blocs `none`, boutons et onglets `sm`, Barre d'onglets `md`. */
-export const ARRONDIS = { none: 0, sm: 2, md: 3, full: 9999 } as const
+
+
+
+
+export const ARRONDIS = { none: 0, sm: 12, md: 16, bloc: 20, full: 9999 } as const
+
+/** `part` de la couleur `a` dans la couleur `b` (deux « #rrggbb »), en « #rrggbb » : une surface teintée, sans transparence. */
+export function melange(a: string, b: string, part: number): Color {
+  const lu = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+  const x = lu(a), y = lu(b)
+  return ("#" + x.map((v, i) => Math.round(v * part + y[i] * (1 - part)).toString(16).padStart(2, "0")).join("")) as Color
+}
+/** Fond d'un creux dans un Bloc (Chiffre, aperçu) : `fond`, arrondi `sm`. */
+export const creux = (c: Palette) => ({ style: c.fond, shape: { type: "rect" as const, cornerRadius: ARRONDIS.sm } })
+/** Fond d'une tuile posée sur la page : `surface`, arrondi `md`. */
+export const fondTuile = (c: Palette) => ({ style: c.surface, shape: { type: "rect" as const, cornerRadius: ARRONDIS.md } })
 
 /** Espacements, en points (DESIGN.md, spacing) ; `cible` : côté minimal d'une zone d'appui. */
 export const ESPACES = {
@@ -163,16 +185,22 @@ export function policeCondensee(role: RoleTexte, capitales = true) {
  * bouton-fermer, bouton-reglages) : carré de 44 à contour `bordure`, fond transparent,
  * icône de 18 en `texte` ; `libelle` : ce que VoiceOver lit.
  */
-function BoutonCarre({ icone, libelle, action }: { icone: string; libelle: string; action: () => void }) {
+function BoutonCarre({ icone, libelle, action, point = false }: { icone: string; libelle: string; action: () => void; point?: boolean }) {
   return (
     <EnvironmentValuesReader keys={["colorSchemeContrast"]}>
       {(env) => {
         const c = couleurs(env.colorSchemeContrast)
         return (
           <Button buttonStyle="plain" action={action} accessibilityLabel={libelle}>
-            <ZStack frame={{ width: ESPACES.cible, height: ESPACES.cible }} contentShape="rect">
+            <ZStack
+              frame={{ width: ESPACES.cible, height: ESPACES.cible }}
+              background={{ style: c.surface, shape: { type: "rect", cornerRadius: ARRONDIS.sm } }}
+              contentShape="rect"
+            >
               <RoundedRectangle cornerRadius={ARRONDIS.sm} stroke={c.bordure} />
               <Image systemName={icone} font={18} foregroundStyle={c.texte} />
+              { }
+              {point ? <RoundedRectangle cornerRadius={ARRONDIS.full} fill={c.rouge} frame={{ width: 9, height: 9 }} offset={{ x: 13, y: -13 }} accessibilityHidden /> : null}
             </ZStack>
           </Button>
         )
@@ -186,12 +214,13 @@ export function BoutonFermer({ action }: { action: () => void }) {
   return <BoutonCarre icone="xmark" libelle="Fermer" action={action} />
 }
 
-/**
- * Bouton Réglages des stats (DESIGN.md, bouton-reglages) : allure du Bouton Fermer,
- * engrenage à la place de la croix ; VoiceOver « Réglages des stats ».
- */
-export function BoutonReglages({ action }: { action: () => void }) {
-  return <BoutonCarre icone="gearshape" libelle="Réglages des stats" action={action} />
+
+
+
+
+export function BoutonReglages({ action, aFaire = false }: { action: () => void; aFaire?: boolean }) {
+  // `aFaire` : une nouvelle version de ValShop est connue ; le point rouge le montre, VoiceOver le dit.
+  return <BoutonCarre icone="gearshape" libelle={aFaire ? "Réglages, une nouvelle version est disponible" : "Réglages"} action={action} point={aFaire} />
 }
 
 /** Hauteur minimale du Bouton principal (DESIGN.md, bouton-principal : min-height), puis celle du Récap (min-height-recap). */
@@ -232,7 +261,7 @@ export function BoutonPrincipal({ libelle, action, inactif = false, enCours = fa
       {(env) => {
         const c = couleurs(env.colorSchemeContrast)
         const capitales = enCapitales(libelle)
-        const avant = sansAppui ? c.texteDiscret : c.fond
+        const avant = sansAppui ? c.texteDiscret : c.blanc
         return (
           <Button
             buttonStyle="plain"
@@ -246,8 +275,8 @@ export function BoutonPrincipal({ libelle, action, inactif = false, enCours = fa
               padding={{ horizontal: 14, vertical: ESPACES.dansBloc }}
               frame={{ maxWidth: "infinity", minHeight: recap ? HAUTEUR_PRINCIPAL_RECAP : HAUTEUR_PRINCIPAL }}
               background={sansAppui
-                ? <RoundedRectangle cornerRadius={ARRONDIS.sm} stroke={c.bordure} />
-                : <RoundedRectangle cornerRadius={ARRONDIS.sm} fill={c.orange} />}
+                ? <RoundedRectangle cornerRadius={ARRONDIS.md} stroke={c.bordure} />
+                : <RoundedRectangle cornerRadius={ARRONDIS.md} fill={c.rouge} />}
               contentShape="rect"
             >
               {enCours ? (
@@ -295,17 +324,18 @@ const ECHELLE_MIN_LIBELLE = 0.8
  * ordinaires, comme la maquette, sa rangée n'étant gardée que si 0,8 suffit (LARGEUR_RANGEE, app.tsx). Sans lui, le
  * libellé passe à la ligne au besoin (tailles d'accessibilité).
  */
-export function BoutonSecondaire({ libelle, action, icone, enCours = false, inactif = false, raison, valeurAccessibilite, valeurSuivie = false, uneLigne = false }: {
+export function BoutonSecondaire({ libelle, action, icone, enCours = false, inactif = false, raison, valeurAccessibilite, valeurSuivie = false, uneLigne = false, destructif = false }: {
   libelle: string; action: () => void; icone?: string; enCours?: boolean; inactif?: boolean; raison?: string
   valeurAccessibilite?: string; valeurSuivie?: boolean; uneLigne?: boolean
+
+  destructif?: boolean
 }) {
   const sansAppui = inactif || enCours
   return (
     <EnvironmentValuesReader keys={["colorSchemeContrast"]}>
       {(env) => {
         const c = couleurs(env.colorSchemeContrast)
-        const avant = sansAppui ? c.texteDiscret : c.texte
-        const contour = sansAppui ? c.bordure : c.texte
+        const avant = sansAppui ? c.texteDiscret : destructif ? c.rougeClair : c.texte
         const bouton = (
           <Button
             buttonStyle="plain"
@@ -319,7 +349,9 @@ export function BoutonSecondaire({ libelle, action, icone, enCours = false, inac
                 spacing={ESPACES.puces}
                 padding={{ horizontal: 14 }}
                 frame={{ minHeight: ESPACES.cible }}
-                background={<RoundedRectangle cornerRadius={ARRONDIS.sm} stroke={contour} />}
+                background={sansAppui
+                  ? <RoundedRectangle cornerRadius={ARRONDIS.sm} stroke={c.bordure} />
+                  : <RoundedRectangle cornerRadius={ARRONDIS.sm} fill={c.surfaceHaute} />}
               >
                 {enCours ? (
                   <ProgressView
@@ -620,7 +652,6 @@ function FeuillePerimetre({ sections, onFermer }: { sections: readonly SectionRe
 }
 
 /** Filet du haut et triangle du Bandeau d'alerte (DESIGN.md, bandeau-alerte), en points. */
-const FILET_BANDEAU = 3
 const ICONE_BANDEAU = 16
 /** Marges du Bandeau d'alerte : celles du Constat de la maquette, qui porte le même filet d'accent. */
 const MARGE_BANDEAU = { vertical: 12, horizontal: 14 } as const
@@ -642,14 +673,9 @@ export function BandeauAlerte({ texte, action }: { texte: string; action?: () =>
           <HStack
             spacing={ESPACES.dansBloc}
             alignment="firstTextBaseline"
-            padding={{ top: FILET_BANDEAU + MARGE_BANDEAU.vertical, bottom: MARGE_BANDEAU.vertical, horizontal: MARGE_BANDEAU.horizontal }}
+            padding={MARGE_BANDEAU}
             frame={{ maxWidth: "infinity", minHeight: ESPACES.cible, alignment: "leading" }}
-            background={
-              <VStack spacing={0}>
-                <Rectangle fill={c.orange} frame={{ height: FILET_BANDEAU }} />
-                <Rectangle fill={c.surface} />
-              </VStack>
-            }
+            background={<RoundedRectangle cornerRadius={ARRONDIS.md} fill={melange(c.orange as string, c.surface as string, 0.2)} />}
             contentShape="rect"
             accessibilityElement={action ? undefined : "combine"}
           >
@@ -693,7 +719,7 @@ export function Chiffre({ libelle, valeur, sousTexte }: { libelle: string; valeu
             spacing={ECART_CHIFFRE}
             padding={ESPACES.cellule}
             frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-            background={c.fond}
+            background={creux(c)}
             accessibilityElement
             accessibilityLabel={`${libelle} : ${valeur}, ${sousTexte}`}
           >
@@ -741,7 +767,8 @@ export function EnTete({ onFermer }: { onFermer: () => void }) {
   return (
     <EnvironmentValuesReader keys={["colorSchemeContrast"]}>
       {(env) => (
-        <HStack>
+        <HStack spacing={ESPACES.dansBloc}>
+          <RoundedRectangle cornerRadius={1.5} fill={couleurs(env.colorSchemeContrast).rouge} frame={{ width: 6, height: 24 }} rotationEffect={14} accessibilityHidden />
           <Text {...policeCondensee(TYPO.titreAppli)} foregroundStyle={couleurs(env.colorSchemeContrast).texte}>
             ValShop
           </Text>
@@ -789,11 +816,16 @@ export function BarreOnglets<T extends string>({ onglets, actif, onChoix }: {
                   <HStack contentShape="rect">
                     <Text
                       {...policeCondensee(choisi ? TYPO.onglet : TYPO.ongletInactif)}
-                      foregroundStyle={choisi ? c.fond : c.texteDiscret}
+                      foregroundStyle={choisi ? c.texte : c.texteDiscret}
                       frame={{ maxWidth: "infinity", minHeight: ESPACES.cible }}
-                      background={choisi
-                        ? <RoundedRectangle cornerRadius={ARRONDIS.sm} fill={c.texte} padding={ESPACES.segments} />
-                        : undefined}
+                      background={choisi ? (
+                        <ZStack alignment="bottom" padding={ESPACES.segments}>
+                          <RoundedRectangle cornerRadius={ARRONDIS.sm} fill={c.surfaceHaute} />
+                          <VStack spacing={0} padding={{ bottom: 4 }}>
+                            <RoundedRectangle cornerRadius={1.5} fill={c.rouge} frame={{ width: 22, height: 3 }} />
+                          </VStack>
+                        </ZStack>
+                      ) : undefined}
                     >
                       {onglet.libelle}
                     </Text>

@@ -3,7 +3,7 @@ import {
 } from "scripting"
 import { createElement, Fragment, useRef, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import { BoutonPrincipal, ESPACES, TYPO, couleurs, tailleAccessibilite, type Palette } from "./design"
-import { PileDeBlocs } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
+import { PileDeBlocs, creux } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
 import { Bloc, SelecteurSegmente, sansMauvaiseCoupure, type Segment } from "./dessin"
 import {
   CASES_RECAP, DEMANDE_DEFAUT, LIBELLES_MODE_RECAP, LIBELLES_PERIODE_RECAP, TOUTES_LES_CASES, debutDuRecap, debutDuTexte, genererRecap,
@@ -389,7 +389,7 @@ function BlocApercu({ sel, debut, cochees }: { sel: SelectionRecap | null; debut
               alignment="leading"
               padding={MARGE_APERCU}
               frame={{ maxWidth: "infinity", alignment: "leading" }}
-              background={c.fond}
+              background={creux(c)}
               accessibilityElement
               accessibilityLabel={apercuDit(sel, cochees)}
             >

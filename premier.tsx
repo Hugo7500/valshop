@@ -1,6 +1,6 @@
-import { HStack, Link, Navigation, Rectangle, Text, VStack } from "scripting"
+import { HStack, Link, Navigation, RoundedRectangle, Text, VStack } from "scripting"
 import { createElement, Fragment } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
-import { BoutonPrincipal, ESPACES, TYPO, policeCondensee, type Palette } from "./design"
+import { ARRONDIS, BoutonPrincipal, ESPACES, TYPO, melange, policeCondensee, type Palette } from "./design"
 import { LIEN_CLE } from "./cle"
 import type { ChoixVue } from "./vue"
 
@@ -25,8 +25,6 @@ type EtatEtape = "faite" | "en cours" | "à faire"
 /** Une Étape de démarrage : son titre, son texte, et le Bouton principal qu'elle porte quand elle est en cours. */
 type Etape = { titre: string; texte: string; bouton: string; action: () => void }
 
-/** Filet gauche d'une Étape de démarrage et côté minimal de son carré, en points. */
-const FILET_ETAPE = 4
 const CARRE_ETAPE = 32
 /** ✓ ou numéro du carré : callout en 800 (16 à la taille par défaut), qui suit la taille du texte. */
 const MARQUE_ETAPE = { font: "callout", fontWeight: "heavy" } as const
@@ -45,20 +43,17 @@ const MARQUE_ETAPE = { font: "callout", fontWeight: "heavy" } as const
 function CarteEtape({ numero, etat, etape, lien, c }: {
   numero: number; etat: EtatEtape; etape: Etape; lien: boolean; c: Palette
 }) {
-  const accent = etat === "faite" ? c.bleu : etat === "en cours" ? c.orange : c.bordure
+
+
+  const accent = etat === "faite" ? c.vert : etat === "en cours" ? c.rouge : c.bordure
   const aFaire = etat === "à faire"
   return (
     <VStack
       alignment="leading"
       spacing={ESPACES.dansBloc}
-      padding={{ top: ESPACES.blocSerre, bottom: ESPACES.blocSerre, leading: FILET_ETAPE + ESPACES.blocSerre, trailing: ESPACES.blocSerre }}
+      padding={ESPACES.bloc}
       frame={{ maxWidth: "infinity", alignment: "leading" }}
-      background={
-        <HStack spacing={0}>
-          <Rectangle fill={accent} frame={{ width: FILET_ETAPE }} />
-          <Rectangle fill={c.surface} />
-        </HStack>
-      }
+      background={<RoundedRectangle cornerRadius={ARRONDIS.bloc} fill={etat === "en cours" ? melange(c.rouge as string, c.surface as string, 0.14) : c.surface} />}
     >
       <VStack
         alignment="leading"
@@ -70,9 +65,9 @@ function CarteEtape({ numero, etat, etape, lien, c }: {
         <HStack spacing={ESPACES.dansBloc}>
           <Text
             {...MARQUE_ETAPE}
-            foregroundStyle={aFaire ? c.texteDiscret : c.fond}
+            foregroundStyle={aFaire ? c.texteDiscret : etat === "faite" ? c.fond : c.blanc}
             frame={{ minWidth: CARRE_ETAPE, minHeight: CARRE_ETAPE }}
-            background={aFaire ? <Rectangle stroke={c.bordure} /> : <Rectangle fill={accent} />}
+            background={aFaire ? <RoundedRectangle cornerRadius={ARRONDIS.full} stroke={c.bordure} /> : <RoundedRectangle cornerRadius={ARRONDIS.full} fill={accent} />}
           >
             {etat === "faite" ? "✓" : String(numero)}
           </Text>
@@ -137,7 +132,7 @@ export function PremierLancement({ compte, cle, onColler, onRecuperer, palette: 
         spacing={ESPACES.dansBloc}
         padding={ESPACES.bloc}
         frame={{ maxWidth: "infinity", alignment: "leading" }}
-        background={c.surface}
+        background={{ style: c.surface, shape: { type: "rect", cornerRadius: ARRONDIS.bloc } }}
       >
         <Text {...policeCondensee(TYPO.titreSection)} foregroundStyle={c.texte} accessibilityAddTraits="isHeader">
           Bienvenue

@@ -4,7 +4,7 @@ import {
 import { createElement, Fragment, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import type { Emplacement, PropsEmplacement } from "./app"
 import { ESPACES, TYPO, couleurs, policeCondensee, tailleAccessibilite, type Palette } from "./design"
-import { PileDeBlocs } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
+import { PileDeBlocs, creux } from "./design" // ticket 4.46 : blocs du sous-onglet dans une pile paresseuse
 import {
   BarrePaire, Barres, Bloc, Constat, Legende, PucesDeChoix, couleurEvaluation, sansMauvaiseCoupure,
   type Barre, type ItemLegende, type Puce, type ValeurPaire,
@@ -340,7 +340,7 @@ function vueChiffre(ch: ChiffreVu, rangee: readonly ChiffreVu[], c: Palette): Vi
       spacing={ECART_CHIFFRE}
       padding={ESPACES.cellule}
       frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-      background={c.fond}
+      background={creux(c)}
       accessibilityElement
       accessibilityLabel={ch.voix}
     >

@@ -4,9 +4,11 @@ import {
   type VirtualNode,
 } from "scripting"
 import { createElement, Fragment, useEffect, useRef, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
+import { planifierResume } from "./widgets-stats-fichier"
 import {
   creerMoteurWeb, elementWeb, fermerMoteurWeb, lancerEffetsWeb, rendreWeb, versNatif, vueVersNatif, type MoteurWeb, type VueWeb,
 } from "./rendu"
+import { garderPreferences, preferencesGardees } from "./preferences"
 import { CSS_BASE, SCRIPT_PAGE, creerTraducteur, type Traducteur } from "./traduction-web"
 import { SCRIPT_MENU, STYLE_MENU, appliquer, comparer, decouper, menusWeb, type Decoupe } from "./morceaux-web"
 import {
@@ -19,7 +21,7 @@ import {
   FinDuRendu, calculMesure, debutDeRendu, direSondeRendu, finirMesure, mesurerAppui, oublierAppui, useLigneDeMesure,
 } from "./design"
 import { Boutique, SansCache, chargerAvecEmpreinte, chargerListe, relireSiChangee, sessionGardee, type ChoixVue, type EmpreinteBoutique, type Shop } from "./vue"
-import { FeuilleReglages, useHistoriqueAvant } from "./reglages"
+import { FeuilleReglages, useNouvelleVersion, useHistoriqueAvant } from "./reglages"
 import { echeanceHistoriqueAvant, historiqueAvantMontre, reessaiDe, vueHistoriqueAvant } from "./historique-avant"
 import { EcranConnexion, InviteConnexion } from "./connexion"
 import { PremierLancement } from "./premier"
@@ -106,6 +108,16 @@ const ONGLETS: Onglet<CleOnglet>[] = [
   { cle: "stats", libelle: "Stats" },
 ]
 
+
+
+
+
+
+let ouvertureReglages: (() => void) | null = null
+function ouvrirReglages() {
+  if (ouvertureReglages !== null) ouvertureReglages()
+}
+
 /**
  * Onglet affiché, ou masqué : invisible, sans appui, caché à VoiceOver, mais toujours
  * monté. Les trois valeurs sont toujours données, seules elles changent d'un onglet à
@@ -122,13 +134,20 @@ function masque(visible: boolean) {
 export function Haut({ onglet, onChoix, onFermer, marges }: {
   onglet: CleOnglet; onChoix: (cle: CleOnglet) => void; onFermer: () => void; marges: boolean
 }) {
+
+  const nouvelle = useNouvelleVersion()
   return (
     <VStack
       spacing={ESPACES.entete}
       padding={marges ? { top: ESPACES.hautPage, horizontal: ESPACES.margePage } : undefined}
     >
       <EnTete onFermer={onFermer} />
-      <BarreOnglets onglets={ONGLETS} actif={onglet} onChoix={onChoix} />
+      {
+}
+      <HStack spacing={8}>
+        <BarreOnglets onglets={ONGLETS} actif={onglet} onChoix={onChoix} />
+        <BoutonReglages action={ouvrirReglages} aFaire={nouvelle !== null} />
+      </HStack>
     </VStack>
   )
 }
@@ -218,7 +237,9 @@ type TableCalculs = { parties: readonly Partie[] | null; calculs: Map<string, Ca
  * (entrée 18) et le harnais, qui lit le calcul courant dans `garde`.
  */
 export function usePerimetre(parties: readonly Partie[] | null, maintenant: number): EtatPerimetre {
-  const [perimetre, setPerimetre] = useState<Perimetre>(PERIMETRE_DEFAUT)
+
+
+  const [perimetre, setPerimetre] = useState<Perimetre>(() => preferencesGardees().perimetre ?? PERIMETRE_DEFAUT)
   const garde = useRef<CalculPerimetre | null>(null)
   const table = useRef<TableCalculs>({ parties: null, calculs: new Map() })
   const rendu = useRef<EtatTenu | null>(null)
@@ -254,10 +275,12 @@ export function usePerimetre(parties: readonly Partie[] | null, maintenant: numb
     selection: tenu ? tenu.selection : null,
     choisirMode: (mode) => {
       if (mode !== perimetre.mode) mesurerAppui("périmètre") // mesure 4.41
+      if (mode !== perimetre.mode) garderPreferences({ perimetre: { mode, periode: perimetre.periode } })
       setPerimetre((p) => (p.mode === mode ? p : { mode, periode: p.periode }))
     },
     choisirPeriode: (periode) => {
       if (periode !== perimetre.periode) mesurerAppui("périmètre") // mesure 4.41
+      if (periode !== perimetre.periode) garderPreferences({ perimetre: { mode: perimetre.mode, periode } })
       setPerimetre((p) => (p.periode === periode ? p : { mode: p.mode, periode }))
     },
     agregat<T>(cle: string, f: (sel: Selection) => T): T | null {
@@ -516,8 +539,8 @@ function PuceSousOnglet({ cle, libelle, choisi, valeur, c, onChoix }: {
           padding={{ horizontal: MARGE_SOUS_ONGLET }}
           frame={{ minWidth: ESPACES.cible, minHeight: ESPACES.cible }}
           background={choisi
-            ? <RoundedRectangle cornerRadius={ARRONDIS.sm} fill={c.orange} />
-            : <RoundedRectangle cornerRadius={ARRONDIS.sm} stroke={c.bordure} />}
+            ? <RoundedRectangle cornerRadius={ARRONDIS.full} fill={c.texte} />
+            : <RoundedRectangle cornerRadius={ARRONDIS.full} fill={c.surface} />}
         >
           <Text
             {...policeCondensee(choisi ? TYPO.sousOnglet : TYPO.sousOngletInactif, enCapitales(libelle))}
@@ -820,7 +843,11 @@ export function Stats({ haut, palette, taille, auto, quandPrete }: {
       })
     } catch { /* jamais : la lecture est tolérante ; les données d'avant restent */ }
     if (!derniere()) return
-    if (lues) setDonnees(lues)
+    if (lues) {
+      setDonnees(lues)
+      // Lot 2 des widgets : le résumé des stats (widget-stats.json), un peu plus tard, l'écran d'abord.
+      planifierResume(e.meta, lues)
+    }
     setLectureVue(false)
   }
 
@@ -839,6 +866,12 @@ export function Stats({ haut, palette, taille, auto, quandPrete }: {
     setFeuille(true)
     historique.surOuverture()
   }
+  // L'engrenage de la Barre d'onglets ouvre cette feuille (ouvrirReglages).
+  const ouvrirStable = useFonctionStable(ouvrir)
+  useEffect(() => {
+    ouvertureReglages = ouvrirStable
+    return () => { if (ouvertureReglages === ouvrirStable) ouvertureReglages = null }
+  }, [])
   const fermer = useFonctionStable(() => {
     setFeuille(false)
     setRefusee(false)
@@ -1065,7 +1098,6 @@ export function Stats({ haut, palette, taille, auto, quandPrete }: {
               uneLigne={!grand}
               action={lancer}
             />
-            <BoutonReglages action={ouvrir} />
           </HStack>
           {alertes.map((b) => (
             <BandeauAlerte key={b.genre} texte={b.texte} action={b.genre === "cle" ? ouvrir : undefined} />
@@ -1607,11 +1639,12 @@ function App({ shop: shopOuvert, empreinte, souhaits, expiree, deconnecte = fals
     if (statut) statut.then((t) => { if (vivant && typeof t === "string" && t !== "") setBandeau(t) }, () => {})
     return () => { vivant = false }
   }, [])
-  const [onglet, setOnglet] = useState<CleOnglet>("stats")
+
+  const [onglet, setOnglet] = useState<CleOnglet>(() => preferencesGardees().ouverture)
   // Ticket 4.51 : la Boutique n'est pas rendue à l'ouverture (≈ 117 éléments natifs, ≈ 0,27 s au modèle, de moins) ; relecture 2 :
   // elle est montée, cachée, après coup (monterBoutique), ou au premier appui sur son onglet s'il vient avant ; puis gardée.
   // `shop` : la boutique lue à l'ouverture, relue au montage si shop.json a changé entre-temps (relireSiChangee).
-  const [boutique, setBoutique] = useState<{ montee: boolean; shop: Shop | null }>({ montee: false, shop: shopOuvert })
+  const [boutique, setBoutique] = useState<{ montee: boolean; shop: Shop | null }>({ montee: onglet === "boutique", shop: shopOuvert })
   const monterBoutique = useFonctionStable(() => {
     if (boutique.montee) return
     const relue = empreinte ? relireSiChangee(empreinte) : null

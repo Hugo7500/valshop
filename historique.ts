@@ -441,6 +441,31 @@ export const LIMITE_SANS_DELAI_S = 60
  */
 export const DELAI_MAX_S = 600
 
+
+
+
+
+
+
+
+export const CODE_SANS_CLASSEMENT = 25
+export const CODES_COMPTE_INCONNU: readonly number[] = [22, 23]
+
+/** Le code d'erreur d'un corps de réponse de HenrikDev (`{ "errors": [{ "code": 25, … }] }`), lu strictement ; null sans lui. */
+export function codeErreur(corps: unknown): number | null {
+  if (!estObjet(corps) || !Array.isArray(corps.errors) || corps.errors.length === 0) return null
+  const premier = corps.errors[0]
+  return estObjet(premier) && Number.isInteger(premier.code) ? premier.code : null
+}
+
+/** Le début du détail d'un échec « compte inconnu de HenrikDev » : c'est lui que les phrases de l'app reconnaissent. */
+export const DETAIL_COMPTE_INCONNU = "compte inconnu de HenrikDev"
+
+/** Un échec `panne` dont le détail dit que HenrikDev ne connaît pas le compte (et non qu'il ne répond pas). */
+export function compteInconnu(e: { type: TypeEchec; detail?: string } | null | undefined): boolean {
+  return e?.type === "panne" && typeof e.detail === "string" && e.detail.includes(DETAIL_COMPTE_INCONNU)
+}
+
 /** L'échec que dit un statut HTTP de HenrikDev ; null pour un 2xx. */
 export function classerStatut(statut: number): TypeEchec | null {
   if (statut >= 200 && statut < 300) return null
@@ -791,9 +816,17 @@ const ECHECS: Record<TypeEchec, string> = {
   roles: "rôles des agents indisponibles",
 }
 
+/** Un compte que HenrikDev ne connaît pas encore : il répond, mais n'a rien pour lui. */
+const ECHEC_COMPTE_INCONNU = "compte pas encore connu de HenrikDev"
+
+/** Un échec en quelques mots : celui de son type, sauf la panne dont le détail dit que le compte est inconnu de HenrikDev. */
+function echecCourt(e: { type: TypeEchec; detail?: string }): string {
+  return compteInconnu(e) ? ECHEC_COMPTE_INCONNU : ECHECS[e.type]
+}
+
 /** Le dernier échec, dit en clair pour le journal : une limite avec son délai restant. */
 export function texteEchec(e: Echec, now: number): string {
-  if (e.type !== "limite") return ECHECS[e.type]
+  if (e.type !== "limite") return echecCourt(e)
   const attente = secondesAvant(e.reessaiApres, now)
   if (attente !== null) return `limite atteinte, réessaie dans ${attente}${NBSP}s`
   return e.reessaiApres === null ? "limite atteinte, réessaie plus tard" : "limite atteinte"
@@ -849,7 +882,7 @@ export function ligneDecoupee(meta: Meta | null, now: number, parties: number = 
   const r = meta?.reprise ?? null
   const quand = r?.quand ? Date.parse(r.quand) : NaN
   const reprise = r === null ? "" : (Number.isNaN(quand) ? "" : ` · ${INTERROMPUE} ${ageEnClair(now - quand)}`) + ` · ${REPRISE_A_FAIRE}`
-  const apres = (e ? ` · ${ECHECS[e.type]}` : "") + reprise + (suite ? ` · ${suite}` : "")
+  const apres = (e ? ` · ${echecCourt(e)}` : "") + reprise + (suite ? ` · ${suite}` : "")
   return { avant, age: avant === "" ? capitale(age) : age, apres, ancienne }
 }
 
@@ -944,6 +977,8 @@ const CAUSES: Record<"panne" | "stockage" | "roles", string> = {
 }
 /** Cause d'un échec `stockage` venu d'une lecture : un fichier gardé qui ne se lit plus (rr.json, historique). */
 const CAUSE_LECTURE = "fichier illisible sur l'iPhone"
+/** Cause d'une panne dont le détail dit que HenrikDev ne connaît pas le compte : ce qu'il demande alors de faire. */
+const CAUSE_COMPTE_INCONNU = "HenrikDev ne connaît pas encore ce compte ; joue une partie, puis réessaie"
 
 /**
  * Un échec `stockage` vient d'une lecture quand son détail le dit avant le message de l'hôte,
@@ -963,7 +998,7 @@ function lectureIllisible(detail: string): boolean {
 export function phraseEchec(type: TypeEchec, detail: string = ""): string {
   return type === "cle" ? "Clé HenrikDev refusée."
     : type === "limite" ? "Limite de HenrikDev atteinte."
-      : `Mise à jour impossible : ${type === "stockage" && lectureIllisible(detail) ? CAUSE_LECTURE : CAUSES[type]}.`
+      : `Mise à jour impossible : ${type === "stockage" && lectureIllisible(detail) ? CAUSE_LECTURE : compteInconnu({ type, detail }) ? CAUSE_COMPTE_INCONNU : CAUSES[type]}.`
 }
 
 

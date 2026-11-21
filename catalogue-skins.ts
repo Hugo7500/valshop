@@ -712,18 +712,18 @@ function css(c: CouleursPage): string {
 html{font:-apple-system-body;-webkit-text-size-adjust:100%}
 html,body{margin:0;background:${c.fond};color:${c.texte}}
 body{line-height:1.3;padding:0 0 calc(24px + env(safe-area-inset-bottom))}
-.tete{position:sticky;top:0;z-index:5;background:${c.fond};padding:8px 16px;border-bottom:1px solid ${c.bordure}}
-#q{width:100%;font:inherit;color:${c.texte};background:${c.surface};border:1px solid ${c.bordure};border-radius:10px;padding:9px 12px;-webkit-appearance:none;appearance:none}
+.tete{position:sticky;top:0;z-index:5;background:${c.fond};padding:8px 16px 10px}
+#q{width:100%;font:inherit;color:${c.texte};background:${c.surface};border:1px solid ${c.bordure};border-radius:14px;padding:11px 14px;-webkit-appearance:none;appearance:none}
 #q::placeholder{color:${c.texteDiscret}}
 .puces{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .puces::-webkit-scrollbar{display:none}
-.puce{flex:0 0 auto;font:inherit;font-size:.88em;color:${c.texteDoux};background:${c.surface};border:1px solid ${c.bordure};border-radius:2px;padding:6px 12px;min-height:36px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.puce{flex:0 0 auto;font:inherit;font-size:.88em;color:${c.texteDoux};background:${c.surface};border:0;border-radius:999px;padding:6px 14px;min-height:36px;font-weight:600;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .puce[aria-pressed="true"]{color:${c.fond};background:${c.texte};border-color:${c.texte}}
 .choix{display:flex;gap:8px;padding-top:6px}
-select{flex:1 1 0;min-width:0;font:inherit;font-size:.88em;color:${c.texte};background:${c.surface};border:1px solid ${c.bordure};border-radius:2px;padding:7px 8px;min-height:36px}
+select{flex:1 1 0;min-width:0;font:inherit;font-size:.88em;color:${c.texte};background:${c.surface};border:0;border-radius:12px;padding:7px 10px;min-height:36px}
 #compte,.note{margin:6px 0 0;font-size:.76em;color:${c.texteDiscret}}
-h2{margin:0;padding:18px 16px 6px;font-size:.76em;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:${c.texteDiscret}}
-ul{list-style:none;margin:0 16px;padding:0;background:${c.surface};border:1px solid ${c.bordure}}
+h2{margin:0;padding:20px 16px 8px;font-size:1em;font-weight:800;font-stretch:condensed;letter-spacing:.06em;text-transform:uppercase;color:${c.texte}}
+ul{list-style:none;margin:0 16px;padding:0;background:${c.surface};border-radius:16px;overflow:hidden}
 li+li{border-top:1px solid ${c.bordure}}
 li[hidden],section[hidden],[hidden]{display:none!important}
 .l{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:8px 12px;font:inherit;color:inherit;text-align:left;background:none;border:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}

@@ -1,4 +1,4 @@
-import { EmptyView, ProgressView, Rectangle, Text, VStack, WebView, ZStack, fetch, useEffect, useRef, useState } from "scripting"
+import { EmptyView, ProgressView, Rectangle, Text, VStack, WebView, Widget, ZStack, fetch, useEffect, useRef, useState } from "scripting"
 import {
   PONT_CATALOGUE, dansBoutique, indexCatalogue, lirePrix, niveauxEnBoutique, niveauxSouhaites, pageCatalogue, prixEnBoutique, prixEtProvenance,
   type DansBoutique, type IndexCatalogue, type PrixEnBoutique, type PrixLus, type SkinDuCatalogue,
@@ -14,6 +14,7 @@ import { construireOrigines, contenuOrigines, ligneJournalOrigines, lireOrigines
 import { BORNE_JSON, texteBorne } from "./securite"
 import { ecrireSur } from "./stockage"
 import { CATALOG, ORIGINES_FILE, PRIX_FILE, PRIX_VUS_FILE, WISHLIST_FILE, note } from "./valshop"
+import { planifierIle } from "./widgets-ile-app"
 
 
 
@@ -463,6 +464,10 @@ export function CatalogueSkins({ shop, souhaits, onSouhaits, ouverture }: {
     }
     setErreur(null)
     onSouhaits(nouvelle)
+    // Lot 2 : le widget Souhaits lit la liste ; il se recharge.
+    try { Widget.reloadAll() } catch { /* il se rechargera seul */ }
+    // Lot 4 : l'île dynamique suit la liste, si son réglage est allumé (sinon rien).
+    planifierIle()
   }
 
   // La fiche poussée : rien avant le premier appui ; la dernière reste au retour, le temps de l'animation.

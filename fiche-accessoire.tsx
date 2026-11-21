@@ -1,8 +1,11 @@
-import { Image, LabeledContent, List, ProgressView, Section, Text, VStack, useState } from "scripting"
+import { Image, LabeledContent, List, ProgressView, Rectangle, Section, Text, VStack, useState } from "scripting"
 import { COULEURS } from "./design"
-import { libelleType, lireAccessoire } from "./fiches"
+import { EnTeteFiche } from "./fiche-cartes"
+import { jusquAu, libelleType, lireAccessoire } from "./fiches"
 import { CATALOG } from "./valshop"
 import { iconeLisible, imageAdmise } from "./securite"
+
+
 
 
 
@@ -74,10 +77,12 @@ function Visuel({ adresse, repli, onEchec }: {
 /**
  * La fiche d'un accessoire d'uuid `id` : grand visuel (un titre : son texte), nom, type, prix. `offre` : nom, type et
  * icône de la rangée touchée ; `prix` : le prix à afficher, déjà écrit avec sa monnaie ; `echouees` : les adresses qui
- * n'ont pas chargé dans la fiche qui l'ouvre, jamais redemandées ici.
+ * n'ont pas chargé dans la fiche qui l'ouvre, jamais redemandées ici ; `fin` (entrée 18) : la fin de l'offre d'un accessoire
+ * de la semaine (`endsAt` de shop.json, null si elle manque), écrite après le type comme dans sa rangée ; absente (objet
+ * d'un bundle) : le type seul.
  */
-export function FicheAccessoire({ id, offre, prix, echouees }: {
-  id: string; offre: ObjetAffichable; prix: string; echouees?: string[]
+export function FicheAccessoire({ id, offre, prix, echouees, fin }: {
+  id: string; offre: ObjetAffichable; prix: string; echouees?: string[]; fin?: string | null
 }) {
   const [catalogue] = useState<unknown>(lireCatalogue)
   // Adresses qui n'ont pas chargé : plus jamais redemandées tant que la fiche est là.
@@ -93,24 +98,19 @@ export function FicheAccessoire({ id, offre, prix, echouees }: {
 
   return (
     <List navigationTitle={offre.name} navigationBarTitleDisplayMode="inline" scrollContentBackground="hidden" background={FOND}>
+      {
+}
       <Section>
-        {titre ? (
-          <Text font="title" fontWeight="heavy" multilineTextAlignment="center" frame={{ maxWidth: "infinity", minHeight: 120 }}>
-            {offre.name}
-          </Text>
-        ) : (
-          <Visuel adresse={image} repli={repli} onEchec={echouer} />
-        )}
-        <VStack alignment="leading" spacing={2}>
-          {titre ? null : (
-            <Text font="title2" fontWeight="bold">
-              {offre.name}
-            </Text>
-          )}
-          <Text font="subheadline" foregroundStyle="secondaryLabel">
-            {libelleType(offre.kind)}
-          </Text>
+        <VStack listRowBackground={<Rectangle fill="clear" />} listRowSeparator="hidden" listRowInsets={0}>
+          <EnTeteFiche
+            t={COULEURS.standard}
+            image={titre ? null : <Visuel adresse={image} repli={repli} onEchec={echouer} />}
+            nom={offre.name}
+            intitule={fin !== undefined ? `${libelleType(offre.kind)} · ${jusquAu(fin)}` : libelleType(offre.kind)}
+          />
         </VStack>
+      </Section>
+      <Section listRowBackground={<Rectangle fill={COULEURS.standard.surface} />}>
         <LabeledContent title="Prix" value={prix} />
       </Section>
     </List>

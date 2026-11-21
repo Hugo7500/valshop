@@ -5,7 +5,7 @@ import {
   type CommonViewProps, type DynamicTypeSize,
 } from "scripting"
 import { createElement, Fragment, useEffect, useRef, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
-import { ARRONDIS, ESPACES, TYPO, blocMesure, couleurs, enCapitales, policeCondensee, tailleAccessibilite, traceMesure, type Palette } from "./design"
+import { ARRONDIS, ESPACES, TYPO, blocMesure, couleurs, creux, melange, enCapitales, policeCondensee, tailleAccessibilite, type Palette } from "./design"
 import {
   AXE_LOBBYS, AXE_MAX, LIBELLES_MODE, LIBELLES_PERIODE, NOTE, PART_FAIBLE, PART_FORTE, STATS_EVOLUTION, TIRET, ecartEnClair, nomDuPalier,
   nombreEnClair, rrEnClair, valeurEnClair,
@@ -78,26 +78,31 @@ export function couleurEvaluation(c: Palette, e: Evaluation): Color {
   return e === "fort" ? c.bleu : e === "faible" ? c.orange : c.texteDoux
 }
 
+
+export function couleurIssue(c: Palette, e: Evaluation): Color {
+  return e === "fort" ? c.vert : e === "faible" ? c.rougeClair : c.texteDoux
+}
+
 /** Une part à dessiner, bornée à 0…1 ; absente ou non finie : rien à dessiner (valeur « — »). */
 function borner(x: number | null | undefined): number | null {
   return typeof x === "number" && Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : null
 }
 
-/** Contour d'un Bloc à la taille reçue : coin bas (en bas à droite) ou coin haut (en haut à gauche) coupé en diagonale, de 18 au plus. */
-function contourBloc(p: Path2D, s: Size, coin: "bas" | "haut") {
-  const w = s.width, h = s.height, k = Math.max(0, Math.min(COIN_COUPE, w, h))
-  if (coin === "bas") {
-    p.move({ x: 0, y: 0 }); p.addLine({ x: w, y: 0 }); p.addLine({ x: w, y: h - k }); p.addLine({ x: w - k, y: h }); p.addLine({ x: 0, y: h })
-  } else {
-    p.move({ x: k, y: 0 }); p.addLine({ x: w, y: 0 }); p.addLine({ x: w, y: h }); p.addLine({ x: 0, y: h }); p.addLine({ x: 0, y: k })
+/**
+ * Rectangle aux coins ronds de rayon `r`, en polygone (cinq points par coin) : x ne dépend que de la largeur, y que de la
+ * hauteur, si bien que la page web en fait un `clip-path` de CSS, comme du biseau.
+ */
+function contourRond(p: Path2D, s: Size, r: number) {
+  const w = s.width, h = s.height, k = Math.min(r, h / 2)
+  const coins: [number, number, number][] = [[w - k, k, -90], [w - k, h - k, 0], [k, h - k, 90], [k, k, 180]]
+  let premier = true
+  for (const [cx, cy, a0] of coins) {
+    for (let i = 0; i <= 4; i++) {
+      const a = (a0 + i * 22.5) * Math.PI / 180
+      const pt = { x: cx + k * Math.cos(a), y: cy + k * Math.sin(a) }
+      if (premier) { p.move(pt); premier = false } else p.addLine(pt)
+    }
   }
-  p.closeSubpath()
-}
-
-/** Masque d'une piste à bout droit biseauté : le haut va jusqu'au bout, le bas s'arrête `biseau` avant (DESIGN.md, Shapes). */
-function contourBiseau(p: Path2D, s: Size, biseau: number) {
-  const w = s.width, h = s.height, b = Math.max(0, Math.min(biseau, w))
-  p.move({ x: 0, y: 0 }); p.addLine({ x: w, y: 0 }); p.addLine({ x: w - b, y: h }); p.addLine({ x: 0, y: h })
   p.closeSubpath()
 }
 
@@ -110,10 +115,8 @@ function Piste({ c, hauteur, part, couleur, biseau }: {
   c: Palette; hauteur: number; part: number | null; couleur: Color; biseau?: number
 }) {
   const f = part, b = biseau
-  const masque = b !== undefined && !REPLIS.anglesDroits
-    // Seule l'opacité d'un masque compte.
-    ? <PathShape fill="black" draw={(p, s) => contourBiseau(p, s, b)} />
-    : undefined
+
+  const masque = REPLIS.anglesDroits ? undefined : <PathShape fill="black" draw={(p, s) => contourRond(p, s, hauteur / 2)} />
   return (
     <ZStack frame={{ height: hauteur }} mask={masque} accessibilityHidden>
       <Rectangle fill={c.fond} />
@@ -188,15 +191,13 @@ export function Bloc({ titre, titreDit, niveau = "bloc", coin = "aucun", serre =
   children?: Contenu
 }) {
   blocMesure(false) // mesure 4.49 : un Bloc rendu
-  const coupe = coin === "aucun" ? null : coin
   return (
     <EnvironmentValuesReader keys={["colorSchemeContrast"]}>
       {(env) => {
         blocMesure(true) // mesure 4.49 : un Bloc lu (pendant le rendu, ou après, par Scripting)
         const c = couleurs(env.colorSchemeContrast)
-        const fond = coupe === null || REPLIS.anglesDroits
-          ? c.surface
-          : <PathShape fill={c.surface} draw={(p, s) => { traceMesure(); contourBloc(p, s, coupe) }} />
+
+        const fond = { style: c.surface, shape: { type: "rect" as const, cornerRadius: ARRONDIS.bloc } }
         return (
           <VStack
             alignment="leading"
@@ -563,7 +564,7 @@ export function JaugeRR({ rr, valeur, derniere, voix }: {
                     valeur + " · ",
                     {
                       content: derniere.texte, font: TYPO.petitFort.font, fontWeight: TYPO.petitFort.fontWeight,
-                      foregroundColor: couleurEvaluation(c, derniere.evaluation), monospacedDigit: true,
+                      foregroundColor: couleurIssue(c, derniere.evaluation), monospacedDigit: true,
                     },
                     " à la dernière partie",
                   ]
@@ -1720,7 +1721,7 @@ export function BarresDeRR({ barres, phrase }: { barres: readonly BarreRr[]; phr
             <RuleLineForValueChart marks={[{ value: 0, foregroundStyle: c.bordure, lineStyle: { lineWidth: BARRES_RR.axe }, accessibilityHidden: true }]} />
             <BarChart
               marks={barres.map((b, i) => ({
-                label: libelles[i], value: rr[i], foregroundStyle: rr[i] < 0 ? c.orange : c.bleu,
+                label: libelles[i], value: rr[i], foregroundStyle: rr[i] < 0 ? c.rougeClair : c.vert,
                 width: { type: "ratio" as const, value: BARRES_RR.largeur },
                 accessibilityLabel: `Partie ${i + 1} : ${rrEnClair(rr[i])}${b.placement ? ", placement" : ""}`,
               }))}
@@ -1894,18 +1895,18 @@ function couchesRepere(marque: Marque, c: Palette): VirtualNode[] {
         <PathShape key="a" stroke={{ shapeStyle: c.bordure, strokeStyle: { lineWidth: 1 } }} draw={segmentCentre} />,
         <PathShape
           key="d"
-          fill={haut ? c.bleu : c.orange}
+          fill={haut ? c.vert : c.rougeClair}
           draw={(p, s) => p.addRect({ x: cx(s) - FORMES.demiCase / 2, y: haut ? cy(s) - FORMES.hautDemiCase : cy(s), width: FORMES.demiCase, height: FORMES.hautDemiCase })}
         />,
       ]
     }
     case "barrePleine":
-      return [<PathShape key="b" fill={c.bleu} draw={(p, s) => rectangleCentre(p, s, FORMES.trait, FORMES.barre)} />]
+      return [<PathShape key="b" fill={c.vert} draw={(p, s) => rectangleCentre(p, s, FORMES.trait, FORMES.barre)} />]
     case "barreCreuse":
       return [
         <PathShape
           key="b"
-          stroke={{ shapeStyle: c.orange, strokeStyle: { lineWidth: FORMES.contourBarre } }}
+          stroke={{ shapeStyle: c.rougeClair, strokeStyle: { lineWidth: FORMES.contourBarre } }}
           draw={(p, s) => rectangleCentre(p, s, FORMES.trait, FORMES.barre, FORMES.contourBarre / 2)}
         />,
       ]
@@ -2120,7 +2121,7 @@ export function ChiffreColore({ chiffre }: { chiffre: ChiffreDeGrille }) {
             spacing={ECART_CHIFFRE}
             padding={ESPACES.cellule}
             frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-            background={c.fond}
+            background={creux(c)}
             accessibilityElement
             accessibilityLabel={chiffre.voix}
           >
@@ -2434,14 +2435,9 @@ export function Constat({ genre, phrase }: { genre: GenreConstat; phrase: string
           <VStack
             alignment="leading"
             spacing={CONSTAT.ecart}
-            padding={{ top: CONSTAT.filet + CONSTAT.vertical, bottom: CONSTAT.vertical, horizontal: CONSTAT.horizontal }}
+            padding={{ vertical: CONSTAT.vertical, horizontal: CONSTAT.horizontal }}
             frame={{ maxWidth: "infinity", alignment: "leading" }}
-            background={
-              <VStack spacing={0}>
-                <Rectangle fill={accent} frame={{ height: CONSTAT.filet }} />
-                <Rectangle fill={c.surface} />
-              </VStack>
-            }
+            background={<RoundedRectangle cornerRadius={ARRONDIS.md} fill={melange(accent as string, c.surface as string, 0.16)} />}
             accessibilityElement
             accessibilityLabel={`${etiquette} : ${phrase}`}
           >

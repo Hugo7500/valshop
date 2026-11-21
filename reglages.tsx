@@ -1,10 +1,18 @@
 import {
-  EnvironmentValuesReader, HStack, Link, ProgressView, Script, ScrollView, SecureField, Spacer, Text, VStack, } from "scripting"
+  EmptyView, EnvironmentValuesReader, HStack, Link, NavigationStack, ProgressView, Rectangle, RoundedRectangle, Script, ScrollView, SecureField, Spacer, Text, Toggle, VStack,
+  Widget, type Color, type VirtualNode,
+} from "scripting"
 import { createElement, Fragment, useEffect, useRef, useState } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import {
-  BoutonFermer, BoutonPrincipal, BoutonSecondaire, BoutonSysteme, Chiffre, ESPACES, TYPO, couleurs, policeCondensee, tailleAccessibilite,
+  ARRONDIS, BoutonFermer, BoutonPrincipal, BoutonSecondaire, BoutonSysteme, Chiffre, ESPACES, TYPO, couleurs, melange, policeCondensee, tailleAccessibilite,
   type Palette,
 } from "./design"
+import { SelecteurSegmente } from "./dessin"
+import { garderPreferences, preferencesGardees, type Ouverture } from "./preferences"
+import { ecrireReglage, lireReglageGarde } from "./widgets-fichier"
+import { PHRASES_ILE, type EtatIle } from "./widgets-ile"
+import { arreterIle, assurerIle } from "./widgets-ile-app"
+import { choisirIle } from "./widgets-reglage"
 import { LIEN_CLE, aUneCle, collerCle, normaliserCle, rangerCle, retirerCle } from "./cle"
 import { NOTE_COLLECTE, chiffresCollecte, phraseCompte } from "./historique"
 import { etatDeLImport, lancerImport, type BilanImport } from "./importation"
@@ -21,6 +29,7 @@ import {
 } from "./mise-a-jour"
 import { lireEtatPrix, lignesPrixCatalogue } from "./prix-retenus"
 import { ETAT_PRIX_FILE } from "./valshop"
+import { MesWidgets } from "./mes-widgets"
 
 // Feuille « Réglages des stats » (DESIGN.md, feuille-reglages ; EXPERIENCE.md, Component
 // Patterns), présentée sur l'onglet Stats (app.tsx) : à mi-hauteur, agrandissable, sombre
@@ -187,7 +196,11 @@ function HistoriqueAvant({ vue, onImporter, c }: { vue: VueHistoriqueAvant; onIm
   )
 }
 
-/** Ticket 4.51 : en-tête de la feuille : son titre et le Bouton Fermer. */
+
+
+
+
+
 function EnTeteFeuille({ c, onFermer }: { c: Palette; onFermer: () => void }) {
   return (
     <HStack>
@@ -196,7 +209,7 @@ function EnTeteFeuille({ c, onFermer }: { c: Palette; onFermer: () => void }) {
         foregroundStyle={c.texte}
         accessibilityAddTraits="isHeader"
       >
-        Réglages des stats
+        Réglages
       </Text>
       <Spacer />
       <BoutonFermer action={onFermer} />
@@ -295,19 +308,19 @@ function SectionCle({ c, refusee }: { c: Palette; refusee: boolean }) {
   )
 }
 
+/** Où changer de compte : dit dans le groupe « Ton compte » (les deux boutons restent en bas de l'onglet Boutique). */
+export const NOTE_COMPTE = "Pour changer de compte ou te déconnecter : tout en bas de l'onglet Boutique."
+
 /** Ticket 4.51 : section Ton compte : une phrase, le seul endroit où s'écrit le Riot ID. */
 function SectionCompte({ c, meta }: { c: Palette; meta: EtatEcran["meta"] }) {
   return (
     <VStack alignment="leading" spacing={ESPACES.dansBloc}>
-      <Text
-        {...policeCondensee(TYPO.etiquette)}
-        foregroundStyle={c.texteDiscret}
-        accessibilityAddTraits="isHeader"
-      >
-        Ton compte
-      </Text>
+      { }
       <Text {...TYPO.corps} foregroundStyle={c.texteDoux}>
         {phraseCompte(meta)}
+      </Text>
+      <Text {...TYPO.note} foregroundStyle={c.texteDiscret}>
+        {NOTE_COMPTE}
       </Text>
     </VStack>
   )
@@ -370,6 +383,30 @@ function SectionPrixCatalogue({ c }: { c: Palette }) {
           {l}
         </Text>
       ))}
+    </VStack>
+  )
+}
+
+/** Textes de la section « Widgets » de la feuille. */
+export const TITRE_WIDGETS = "Widgets"
+export const BOUTON_WIDGETS = "Mes widgets"
+export const NOTE_WIDGETS = "Choisis ce que montre chaque widget de ton écran d'accueil."
+
+
+
+
+
+
+function SectionWidgets({ c, onOuvrir }: { c: Palette; onOuvrir: () => void }) {
+  return (
+    <VStack alignment="leading" spacing={ESPACES.dansBloc}>
+      <Text {...policeCondensee(TYPO.etiquette)} foregroundStyle={c.texteDiscret} accessibilityAddTraits="isHeader">
+        {TITRE_WIDGETS}
+      </Text>
+      <BoutonSecondaire libelle={BOUTON_WIDGETS} action={onOuvrir} />
+      <Text {...TYPO.corps} foregroundStyle={c.texteDoux}>
+        {NOTE_WIDGETS}
+      </Text>
     </VStack>
   )
 }
@@ -484,39 +521,172 @@ function SectionAPropos({ c }: { c: Palette }) {
   )
 }
 
+
+
+
+
+
+
+export const TITRE_OUVERTURE = "Écran d'ouverture"
+export const REFUS_OUVERTURE = "Réglage non gardé, réessaie."
+export const NOTE_OUVERTURE = "L'onglet que ValShop montre quand tu l'ouvres. Ta vue des stats (mode et période) est gardée d'une fois sur l'autre."
+const SEGMENTS_OUVERTURE = [{ cle: "boutique", libelle: "Boutique" }, { cle: "stats", libelle: "Stats" }] as const
+
+function SectionOuverture({ c }: { c: Palette }) {
+  const [ouverture, setOuverture] = useState<Ouverture>(() => preferencesGardees().ouverture)
+  const [refus, setRefus] = useState(false)
+  /** Écriture refusée : le choix ne change pas, et c'est dit. */
+  const choisir = (o: Ouverture) => {
+    const ok = garderPreferences({ ouverture: o })
+    setRefus(!ok)
+    if (ok) setOuverture(o)
+  }
+  return (
+    <VStack alignment="leading" spacing={ESPACES.dansBloc}>
+      <Text {...policeCondensee(TYPO.etiquette)} foregroundStyle={c.texteDiscret} accessibilityAddTraits="isHeader">
+        {TITRE_OUVERTURE}
+      </Text>
+      <SelecteurSegmente segments={SEGMENTS_OUVERTURE} choisi={ouverture} onChoix={choisir} />
+      {refus ? (
+        <Text {...TYPO.corps} foregroundStyle={c.orange}>
+          {REFUS_OUVERTURE}
+        </Text>
+      ) : null}
+      <Text {...TYPO.corps} foregroundStyle={c.texteDoux}>
+        {NOTE_OUVERTURE}
+      </Text>
+    </VStack>
+  )
+}
+
+export const TITRE_ILE = "Île dynamique"
+export const LIBELLE_ILE = "Quand un souhait est en boutique"
+export const NOTE_ILE = "L'étoile et le compte à rebours du reset dans l'île dynamique. Elle se lance quand ValShop lit ta boutique, app ouverte."
+export const REFUS_ILE = "Réglage non gardé, réessaie."
+
+function SectionIle({ c }: { c: Palette }) {
+  const [allumee, setAllumee] = useState<boolean>(() => lireReglageGarde().ile === true)
+  const [etat, setEtat] = useState<EtatIle>("eteinte")
+  const [refus, setRefus] = useState(false)
+  /** Garde le choix dans widgets.json (relu à l'instant : « Mes widgets » a pu changer le reste), puis lance ou arrête l'île. */
+  const basculer = (oui: boolean) => {
+    try {
+      ecrireReglage(choisirIle(lireReglageGarde(), oui))
+    } catch {
+      setRefus(true)
+      return
+    }
+    setRefus(false)
+    setAllumee(oui)
+    try { Widget.reloadAll() } catch { /* les widgets se rechargeront seuls */ }
+    if (oui) assurerIle().then(setEtat).catch(() => { /* rien à dire */ })
+    else {
+      setEtat("eteinte")
+      arreterIle().catch(() => { /* iOS la retirera de lui-même */ })
+    }
+  }
+  return (
+    <VStack alignment="leading" spacing={ESPACES.dansBloc}>
+      <Text {...policeCondensee(TYPO.etiquette)} foregroundStyle={c.texteDiscret} accessibilityAddTraits="isHeader">
+        {TITRE_ILE}
+      </Text>
+      <Toggle title={LIBELLE_ILE} value={allumee} onChanged={basculer} tint={c.vert} foregroundStyle={c.texte} />
+      {allumee && PHRASES_ILE[etat] !== "" ? (
+        <Text {...TYPO.corps} foregroundStyle={etat === "refusee" || etat === "echec" ? c.orange : c.texteDoux}>
+          {PHRASES_ILE[etat]}
+        </Text>
+      ) : null}
+      {refus ? (
+        <Text {...TYPO.corps} foregroundStyle={c.orange}>
+          {REFUS_ILE}
+        </Text>
+      ) : null}
+      <Text {...TYPO.note} foregroundStyle={c.texteDiscret}>
+        {NOTE_ILE}
+      </Text>
+    </VStack>
+  )
+}
+
+/** Les titres des groupes de la feuille, dans l'ordre. */
+export const GROUPES = { nouvelle: "À faire", compte: "Ton compte", stats: "Stats", affichage: "Affichage", boutique: "Boutique", valshop: "ValShop" } as const
+
+/**
+ * Un groupe de la feuille : son titre (le trait d'accent penché, puis le titre en titre de bloc), et une carte `surface`
+ * portant ses sections, un filet `bordure` entre deux. `teinte` : la carte teintée (rouge : ce qui est à faire).
+ */
+function Groupe({ c, titre, teinte, children }: { c: Palette; titre: string; teinte?: Color; children: (VirtualNode | null | false)[] | VirtualNode }) {
+  const sections = (Array.isArray(children) ? children : [children]).filter((x): x is VirtualNode => !!x)
+  if (sections.length === 0) return <EmptyView />
+  return (
+    <VStack alignment="leading" spacing={ESPACES.dansBloc} frame={{ maxWidth: "infinity", alignment: "leading" }}>
+      <HStack spacing={8}>
+        <RoundedRectangle cornerRadius={1} fill={teinte ?? c.rouge} frame={{ width: 5, height: 16 }} rotationEffect={14} accessibilityHidden />
+        <Text {...policeCondensee(TYPO.titreBloc)} foregroundStyle={c.texte} accessibilityAddTraits="isHeader">
+          {titre}
+        </Text>
+      </HStack>
+      <VStack
+        alignment="leading"
+        spacing={ESPACES.bloc}
+        padding={ESPACES.bloc}
+        frame={{ maxWidth: "infinity", alignment: "leading" }}
+        background={{ style: teinte ? melange(teinte as string, c.surface as string, 0.18) : c.surface, shape: { type: "rect", cornerRadius: ARRONDIS.bloc } }}
+      >
+        {sections.flatMap((s, i) => (i === 0 ? [s] : [<Rectangle key={`filet-${i}`} fill={c.bordure} frame={{ height: 1 }} accessibilityHidden />, s]))}
+      </VStack>
+    </VStack>
+  )
+}
+
 /** Entrée 4 : la version plus récente sue, suivie : une annonce arrivée feuille ouverte la montre aussitôt. */
-function useNouvelleVersion(): NouvelleVersion | null {
+export function useNouvelleVersion(): NouvelleVersion | null {
   const [v, setV] = useState<NouvelleVersion | null>(() => nouvelleVersionConnue())
   useEffect(() => ecouterNouvelleVersion(() => setV(nouvelleVersionConnue())), [])
   return v
 }
 
-/**
- * Contenu de la feuille. `onFermer` : la ferme (Bouton Fermer), comme le glissement vers
- * le bas. `refusee` : ouverte sur un « Coller ma clé » que le trousseau a refusé (étape 2 du
- * Premier lancement) : le message de refus d'emblée, comme après son propre « Coller ».
- * `ecran`, `maintenant` : l'état d'écran de l'onglet Stats (métadonnées du compte connecté,
- * null sans compte connu, et nombre de parties gardées) et son heure, d'où Ton compte et
- * Collecte, recalculés à chacun de ses rendus. `historique`, `onImporter` : la vue de Ton
- * historique d'avant, calculée par l'onglet (null : aucun fichier d'import connu, la section
- * n'est pas rendue), et l'appui sur son bouton. Ticket 4.51 : chaque
- * section est un composant aux props stables (palette de `couleurs`, constante ; métadonnées et
- * heure de l'onglet ; appuis stables) : une avancée de l'import ne rend que sa section, et
- * l'onglet rendu sans rien changer ne rend pas la feuille (props identiques). Rien ne change à l'écran.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function FeuilleReglages({ onFermer, refusee = false, ecran, maintenant, historique, onImporter }: {
   onFermer: () => void; refusee?: boolean; ecran: EtatEcran; maintenant: number; historique: VueHistoriqueAvant | null; onImporter: () => void
 }) {
   const nouvelle = useNouvelleVersion()
+  const [widgets, setWidgets] = useState({ montes: false, pousses: false })
+  const ouvrirWidgets = useRef(() => setWidgets({ montes: true, pousses: true })).current
   return (
     <EnvironmentValuesReader keys={["colorSchemeContrast", "dynamicTypeSize"]}>
       {(env) => {
         const c = couleurs(env.colorSchemeContrast)
         return (
+          <NavigationStack>
           <ScrollView
             preferredColorScheme="dark"
             presentationDetents={["medium", "large"]}
-            presentationBackground={c.surface}
+            presentationBackground={c.fond}
+            navigationTitle="Réglages"
+            navigationBarVisibility="hidden"
+            navigationDestination={{
+              isPresented: widgets.pousses,
+              onChanged: (pousses: boolean) => setWidgets((w) => ({ montes: w.montes, pousses })),
+              content: widgets.montes ? <MesWidgets /> : <EmptyView />,
+            }}
           >
             <VStack
               alignment="leading"
@@ -525,16 +695,36 @@ export function FeuilleReglages({ onFermer, refusee = false, ecran, maintenant, 
               padding={{ top: ESPACES.hautPage, horizontal: ESPACES.margePage, bottom: ESPACES.basPage }}
             >
               <EnTeteFeuille c={c} onFermer={onFermer} />
-              {nouvelle !== null ? <SectionMiseAJour key={`maj-${nouvelle.version}`} c={c} v={nouvelle} /> : null}
-              <SectionCle c={c} refusee={refusee} />
-              <SectionCompte c={c} meta={ecran.meta} />
-              {historique !== null ? <HistoriqueAvant vue={historique} onImporter={onImporter} c={c} /> : null}
-              <SectionCollecte c={c} grand={tailleAccessibilite(env.dynamicTypeSize)} meta={ecran.meta} parties={ecran.parties} maintenant={maintenant} />
-              <SectionPrixCatalogue c={c} />
-              <SectionPartage c={c} />
-              <SectionAPropos c={c} />
+              {nouvelle !== null ? (
+                <Groupe c={c} titre={GROUPES.nouvelle} teinte={c.rouge}>
+                  <SectionMiseAJour key={`maj-${nouvelle.version}`} c={c} v={nouvelle} />
+                </Groupe>
+              ) : null}
+              <Groupe c={c} titre={GROUPES.compte}>
+                <SectionCompte c={c} meta={ecran.meta} />
+              </Groupe>
+              {/* « Stats » juste sous le compte : la Clé HenrikDev reste près du haut de la feuille, qui s'ouvre à mi-hauteur
+                  (« Coller ma clé » du premier lancement l'ouvre pour ce champ et son message de refus). */}
+              <Groupe c={c} titre={GROUPES.stats}>
+                <SectionCle c={c} refusee={refusee} />
+                <SectionCollecte c={c} grand={tailleAccessibilite(env.dynamicTypeSize)} meta={ecran.meta} parties={ecran.parties} maintenant={maintenant} />
+                {historique !== null ? <HistoriqueAvant vue={historique} onImporter={onImporter} c={c} /> : null}
+              </Groupe>
+              <Groupe c={c} titre={GROUPES.affichage}>
+                <SectionWidgets c={c} onOuvrir={ouvrirWidgets} />
+                <SectionIle c={c} />
+                <SectionOuverture c={c} />
+              </Groupe>
+              <Groupe c={c} titre={GROUPES.boutique}>
+                <SectionPrixCatalogue c={c} />
+              </Groupe>
+              <Groupe c={c} titre={GROUPES.valshop}>
+                <SectionPartage c={c} />
+                <SectionAPropos c={c} />
+              </Groupe>
             </VStack>
           </ScrollView>
+          </NavigationStack>
         )
       }}
     </EnvironmentValuesReader>

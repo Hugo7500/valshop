@@ -9,7 +9,7 @@ import {
   ARRONDIS, BoutonSecondaire, ESPACES, TYPO, couleurs, policeCondensee, tailleAccessibilite, type Palette,
   FinDuRendu, debutDeRendu, mesurerAppui, useLigneDeMesure,
 } from "./design"
-import { PileDeBlocs } from "./design" // ticket 4.46 : blocs du sous-onglet et du Détail dans une pile paresseuse
+import { PileDeBlocs, creux } from "./design" // ticket 4.46 : blocs du sous-onglet et du Détail dans une pile paresseuse
 import {
   Bloc, ChoixDeManche, ElementAjustable, Legende, LignesDetaillees, REPLIS, SEGMENTS_MODE, SelecteurSegmente, Tableau, sansMauvaiseCoupure,
   titreAffiche, type ItemLegende, type LigneDetaillee, type LigneTableau,
@@ -1108,7 +1108,8 @@ export function mortsDuDetail(p: Partie, cartes: SectionCartes): MortsDetail | n
 
 /** La couleur d'un ton : `bleu`, `orange`, `texte-doux`. */
 function couleurTon(c: Palette, t: Ton): Color {
-  return t === "victoire" ? c.bleu : t === "defaite" ? c.orange : c.texteDoux
+
+  return t === "victoire" ? c.vert : t === "defaite" ? c.rougeClair : c.texteDoux
 }
 
 
@@ -1131,9 +1132,9 @@ function vueFrise(frise: Frise, c: Palette): VirtualNode {
         accessibilityElement
         accessibilityLabel={m.libelle}
       >
-        <Rectangle fill={m.gagnee === true ? c.bleu : "clear"} frame={{ height: FRISE.demi }} />
+        <Rectangle fill={m.gagnee === true ? c.vert : "clear"} frame={{ height: FRISE.demi }} />
         <Rectangle fill={c.bordure} frame={{ height: FRISE.axe }} />
-        <Rectangle fill={m.gagnee === false ? c.orange : "clear"} frame={{ height: FRISE.demi }} />
+        <Rectangle fill={m.gagnee === false ? c.rougeClair : "clear"} frame={{ height: FRISE.demi }} />
       </VStack>,
     )
   })
@@ -1288,11 +1289,14 @@ function vueLigneSeule(l: LignePartie, c: Palette, grand: boolean): VirtualNode 
     </Text>
   ) : null
   const badge = l.mention !== null ? vueBadge(l.mention, c) : null
+
   const fond = (
-    <HStack spacing={0}>
-      <Rectangle fill={couleurTon(c, l.bordure)} frame={{ width: LIGNE.bordure }} />
-      <Rectangle fill={c.surface} />
-    </HStack>
+    <ZStack alignment="leading">
+      <RoundedRectangle cornerRadius={ARRONDIS.md} fill={c.surface} />
+      <VStack spacing={0} padding={{ vertical: 10, leading: 6 }}>
+        <RoundedRectangle cornerRadius={LIGNE.bordure / 2} fill={couleurTon(c, l.bordure)} frame={{ width: LIGNE.bordure }} />
+      </VStack>
+    </ZStack>
   )
   const marges = { top: LIGNE.vertical, bottom: LIGNE.vertical, leading: LIGNE.bordure + LIGNE.horizontal, trailing: LIGNE.horizontal }
   if (grand) {
@@ -1473,7 +1477,7 @@ function vueChiffre(ch: ChiffreDetail, rangee: readonly ChiffreDetail[], c: Pale
       spacing={CHIFFRE.ecart}
       padding={ESPACES.cellule}
       frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
-      background={c.fond}
+      background={creux(c)}
       accessibilityElement
       accessibilityLabel={ch.voix}
     >
@@ -1644,11 +1648,11 @@ function vueCase(cm: CaseManche, choisie: boolean, lettres: boolean, c: Palette)
   )
   const hauteur = { maxWidth: "infinity", height: CASE_MANCHE.barre } as const
   const barre = cm.gagnee === true ? (
-    <Rectangle key="barre" fill={c.bleu} frame={hauteur} />
+    <Rectangle key="barre" fill={c.vert} frame={hauteur} />
   ) : cm.gagnee === false ? (
     <PathShape
       key="barre"
-      stroke={{ shapeStyle: c.orange, strokeStyle: { lineWidth: CASE_MANCHE.contour } }}
+      stroke={{ shapeStyle: c.rougeClair, strokeStyle: { lineWidth: CASE_MANCHE.contour } }}
       draw={(p, s) => rectangleRentre(p, s, CASE_MANCHE.contour / 2)}
       frame={hauteur}
     />

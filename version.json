@@ -1,7 +1,9 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "notes": [
-    "Première version partagée : ta boutique du jour, le widget et les stats de tes parties.",
-    "Nouveau dans les réglages des stats : Partager ValShop, Mettre à jour ValShop et À propos."
+    "Nouvelle allure : toute l'app prend le style des widgets.",
+    "La Boutique montre tes skins en grand, avec ton souhait signalé quand il est en boutique.",
+    "Nouveaux widgets : plus de choix en grand et en très grand, le carrousel, l'écran verrouillé, l'île dynamique.",
+    "Réglages rangés par groupes ; choisis l'onglet d'ouverture, ta vue des stats est gardée."
   ]
 }

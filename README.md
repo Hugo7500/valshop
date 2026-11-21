@@ -54,26 +54,26 @@ Ouvre ValShop au moins toutes les deux semaines pour ne rien perdre.
 
 Tout reste sur ton iPhone. ValShop ne parle qu'à :
 
-- **Riot** : ta connexion et ta boutique ;
+- **Riot** : ta connexion, ta boutique et le solde de ton compte (Points VALORANT, Radianite, Crédits Kingdom) ;
 - **HenrikDev** : tes parties, avec ta clé ;
 - **valorant-api.com** : les noms et les images du jeu ;
 - **GitHub** : une fois par jour au plus, ValShop lit le numéro de la dernière version publiée ici ; rien n'est envoyé.
 
-À l'ouverture de l'app, ValShop fait ces demandes tout seul : à Riot, ta boutique, quand celle du jour n'a pas encore été lue ; à HenrikDev, l'état des serveurs de Riot et tes nouvelles parties (sauf si une mise à jour, réussie ou non, a eu lieu dans les 30 dernières minutes).
+À l'ouverture de l'app, ValShop fait ces demandes tout seul : à Riot, ta boutique et ton solde avec elle, quand celle du jour n'a pas encore été lue ; à HenrikDev, l'état des serveurs de Riot et tes nouvelles parties (sauf si une mise à jour, réussie ou non, a eu lieu dans les 30 dernières minutes).
 
-Rien n'est envoyé à la personne qui t'a donné le lien. Le bouton **Envoyer le lien d'installation** (réglages des stats, **Partager ValShop**) n'envoie que l'adresse de ce dépôt : ni tes stats, ni ta clé, ni ta session.
+Rien n'est envoyé à la personne qui t'a donné le lien. Le bouton **Envoyer le lien d'installation** (**Réglages**, groupe **ValShop**) n'envoie que l'adresse de ce dépôt : ni tes stats, ni ta clé, ni ta session.
 
 ## Sécurité
 
-- **N'installe pas de scripts douteux dans Scripting.** Les scripts de Scripting partagent le même environnement sur ton iPhone : un script malveillant installé à côté de ValShop pourrait lire ses fichiers (tes stats, ta boutique, ton identifiant de joueur) et même, en se faisant passer pour ValShop, lire ta session Riot et ta clé. N'installe que des scripts dont tu connais l'auteur.
-- **Révoquer ta clé HenrikDev.** Sur le tableau de bord de HenrikDev (<https://api.henrikdev.xyz/dashboard/>), menu **API Keys** : supprime la clé, puis crée-en une nouvelle si tu veux continuer. Dans ValShop, **Retirer la clé** (réglages des stats) l'efface de ton iPhone.
-- **Te déconnecter de Riot.** Dans l'onglet **Boutique**, tout en bas, touche **Se déconnecter** : ValShop efface ta session Riot de ton iPhone, avec la boutique qu'il gardait. Ton historique de parties, ta liste de souhaits et ta clé HenrikDev restent (pour la clé : **Retirer la clé**, dans les réglages des stats). Pour fermer aussi la session chez Riot, change ton mot de passe sur le site de Riot.
+- **N'installe pas de scripts douteux dans Scripting.** Les scripts de Scripting partagent le même environnement sur ton iPhone : un script malveillant installé à côté de ValShop pourrait lire ses fichiers (tes stats, ta boutique, ton solde, ton identifiant de joueur) et même, en se faisant passer pour ValShop, lire ta session Riot et ta clé. N'installe que des scripts dont tu connais l'auteur.
+- **Révoquer ta clé HenrikDev.** Sur le tableau de bord de HenrikDev (<https://api.henrikdev.xyz/dashboard/>), menu **API Keys** : supprime la clé, puis crée-en une nouvelle si tu veux continuer. Dans ValShop, **Retirer la clé** (**Réglages**, groupe **Stats**) l'efface de ton iPhone.
+- **Te déconnecter de Riot.** Dans l'onglet **Boutique**, tout en bas, touche **Se déconnecter** : ValShop efface ta session Riot de ton iPhone, avec la boutique et le solde qu'il gardait. Ton historique de parties, ta liste de souhaits et ta clé HenrikDev restent (pour la clé : **Retirer la clé**, dans les **Réglages**). Pour fermer aussi la session chez Riot, change ton mot de passe sur le site de Riot.
 - **Supprimer ValShop ne te déconnecte pas forcément.** Ta session Riot et ta clé HenrikDev sont rangées dans le trousseau de ton iPhone, qui peut les garder après la suppression de ValShop, et même de l'app Scripting : une réinstallation les retrouverait. Avant de supprimer, touche **Se déconnecter** et **Retirer la clé**. Tes stats et le journal restent dans le dossier commun de Scripting, où d'autres scripts peuvent les lire.
 - **Mettre à jour, c'est faire confiance à l'auteur de ce dépôt.** Chaque nouvelle version installe le code publié ici, tel que son auteur l'a écrit. Ne mets à jour que depuis ce dépôt, par le bouton **Mettre à jour ValShop** ou ton lien d'installation.
 
 ## Mettre à jour
 
-Quand une nouvelle version est publiée, la section **Nouvelle version** apparaît dans les réglages des stats (l'engrenage de l'onglet **Stats**), avec ce qui change. Touche **Mettre à jour ValShop** : Scripting importe la nouvelle version depuis ce dépôt. Tu peux aussi toucher de nouveau ton lien d'installation.
+Quand une nouvelle version est publiée, un point rouge apparaît sur l'engrenage (en haut, à droite des onglets) et la section **Nouvelle version** s'affiche en tête des **Réglages**, avec ce qui change. Touche **Mettre à jour ValShop** : Scripting importe la nouvelle version depuis ce dépôt. Tu peux aussi toucher de nouveau ton lien d'installation.
 
 - **Ne supprime pas l'ancien ValShop avant** : ta clé HenrikDev et ta session Riot sont rattachées à ce script, et tu pourrais avoir à les redonner.
 - Si Scripting te demande quoi faire du script déjà installé, choisis de le remplacer.
@@ -87,11 +87,11 @@ Rien ne s'installe tout seul : une nouvelle version n'arrive que si tu touches l
 - **Je ne trouve pas ValShop dans Scripting.** Il s'appelle **valshop-s0** dans la liste des scripts.
 - **La connexion Riot échoue.** Un compte Riot qui ne se connecte qu'avec Google, Apple ou Facebook peut ne pas marcher dans la page de l'app : ajoute un mot de passe à ton compte Riot sur le site de Riot, puis réessaie avec ton identifiant et ce mot de passe.
 - **La boutique ne s'affiche plus.** Ta session Riot a expiré : touche **Me connecter**.
-- **Clé refusée.** Vérifie qu'elle commence par **HDEV-** et qu'elle est entière ; sinon crée-en une nouvelle sur le tableau de bord de HenrikDev, puis **Coller ma clé** dans les réglages des stats.
+- **Clé refusée.** Vérifie qu'elle commence par **HDEV-** et qu'elle est entière ; sinon crée-en une nouvelle sur le tableau de bord de HenrikDev, puis colle-la dans les **Réglages**, groupe **Stats**.
 - **Limite atteinte.** HenrikDev limite le nombre de requêtes par clé : attends quelques minutes, puis touche de nouveau **Mettre à jour**.
 - **Il manque mes vieilles parties.** HenrikDev ne garde que tes parties récentes (une centaine environ) : ce qui était plus ancien le jour de ta première collecte ne peut pas être récupéré. Depuis, ValShop garde chaque partie qu'il récupère : ouvre l'app au moins toutes les deux semaines pour ne rien perdre.
 - **Ma dernière partie n'apparaît pas.** À l'ouverture, ValShop ne redemande tes parties que si la dernière mise à jour, réussie ou non, a plus de 30 minutes, et il lui faut une dizaine de secondes, l'app ouverte : touche **Mettre à jour** dans l'onglet **Stats** pour l'avoir tout de suite.
-- **Le widget.** Sur l'écran d'accueil, ajoute un widget **Scripting**, puis choisis le script **valshop-s0** dans ses réglages.
+- **Le widget.** Sur l'écran d'accueil, ajoute un widget **Scripting**, puis choisis le script **valshop-s0** dans ses réglages. Ce qu'il montre se choisit dans ValShop : **Réglages**, **Mes widgets**. Pour un deuxième widget de la même taille, écris **2** dans sa case **Paramètre**.
 - **Sans Scripting Pro.** ValShop marche sans l'abonnement : il range alors tes parties dans des fichiers, un peu plus lentement.
 
 ## Mentions

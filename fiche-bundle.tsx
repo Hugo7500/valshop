@@ -3,6 +3,7 @@ import {
   type VirtualNode,
 } from "scripting"
 import { COULEURS } from "./design"
+import { EnTeteFiche } from "./fiche-cartes"
 import { FicheAccessoire } from "./fiche-accessoire"
 import { FicheSkin } from "./fiche-skin"
 import { jusquAu, libelleType, objetsDuBundle, separerNom, type ObjetAffiche } from "./fiches"
@@ -192,20 +193,17 @@ export function FicheBundle({ bundle, ouverture }: { bundle: BundleAffiche; ouve
         content: pousse ? ficheDe(pousse, adresse(pousse), pile.n, echecs) : <EmptyView />,
       }}
     >
+      { }
       <Section>
-        <GrandeImage icon={bundle.icon} />
-        <VStack alignment="leading" spacing={2}>
-          <Text font="title2" fontWeight="bold">
-            {bundle.name}
-          </Text>
-          <Text font="subheadline" foregroundStyle="secondaryLabel">
-            {jusquAu(bundle.endsAt)}
-          </Text>
+        <VStack listRowBackground={<Rectangle fill="clear" />} listRowSeparator="hidden" listRowInsets={0}>
+          <EnTeteFiche t={COULEURS.standard} image={<GrandeImage icon={bundle.icon} />} nom={bundle.name} intitule={jusquAu(bundle.endsAt)} />
         </VStack>
+      </Section>
+      <Section listRowBackground={<Rectangle fill={COULEURS.standard.surface} />}>
         <LabeledContent title="Prix" value={prixDit(prix)} />
         {bundle.cost != null && bundle.cost !== prix ? <LabeledContent title="Prix de base" value={prixDit(bundle.cost)} /> : null}
       </Section>
-      <Section title="Contenu">
+      <Section title="Contenu" listRowBackground={<Rectangle fill={COULEURS.standard.surface} />}>
         {objets === null ? (
           <Text foregroundStyle="secondaryLabel">Contenu après la prochaine mise à jour de la boutique.</Text>
         ) : objets.length === 0 ? (

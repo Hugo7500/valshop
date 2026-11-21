@@ -1,8 +1,9 @@
 import {
-  AVPlayerView, Button, Circle, EmptyView, HStack, Image, LabeledContent, List, ProgressView, ScrollView, Section, Spacer,
+  AVPlayerView, Button, Circle, EmptyView, HStack, Image, LabeledContent, List, ProgressView, Rectangle, ScrollView, Section, Spacer,
   Text, VStack, ZStack, useEffect, useObservable, useRef, useState, type PIPStatus,
 } from "scripting"
 import { COULEURS } from "./design"
+import { BoutonSouhait, EnTeteFiche } from "./fiche-cartes"
 import { libelleVariante, lireFicheSkin, separerNom, type NiveauDeSkin } from "./fiches"
 import { catalogueAReconstruire, type Variante } from "./souhaits"
 import { CATALOG } from "./valshop"
@@ -29,7 +30,8 @@ import { iconeLisible, imageAdmise, videoAdmise } from "./securite"
 
 
 /** Nom et icône d'une offre tels que la liste les montre (shop.json) : le repli de la fiche. */
-export type OffreAffichee = { name: string; icon: string | null }
+
+export type OffreAffichee = { name: string; icon: string | null; color?: string | null }
 
 
 
@@ -548,29 +550,31 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
         ) : <EmptyView />,
       }}
     >
+      {
+}
       <Section>
-        <GrandeImage adresse={adresse} repli={offre?.icon ?? null} onEchec={echouer} />
-        <VStack alignment="leading" spacing={2}>
-          <Text font="title2" fontWeight="bold">
-            {noms.skin}
-          </Text>
-          {arme ? (
-            <Text font="subheadline" foregroundStyle="secondaryLabel">
-              {arme}
-            </Text>
-          ) : null}
+        <VStack listRowBackground={<Rectangle fill="clear" />} listRowSeparator="hidden" listRowInsets={0}>
+          <EnTeteFiche
+            t={COULEURS.standard}
+            image={<GrandeImage adresse={adresse} repli={offre?.icon ?? null} onEchec={echouer} />}
+            nom={noms.skin}
+            intitule={arme || null}
+            couleur={offre?.color ?? null}
+          />
         </VStack>
+      </Section>
+      <Section listRowBackground={<Rectangle fill={SURFACE} />}>
         {infos && infos.remise ? <PrixRemise prix={infos.prix} remise={infos.remise} />
           : infos && infos.sansPrix && infos.origine ? <LabeledContent title="Origine" value={infos.origine} />
           : <LabeledContent title="Prix" value={infos ? infos.prix : prixDit(prix)} />}
       </Section>
       {infos ? (
-        <Section>
+        <Section listRowBackground={<Rectangle fill={SURFACE} />}>
           {infos.source ? <LabeledContent title="Source du prix" value={infos.source} /> : null}
           {infos.origine && !infos.sansPrix ? <LabeledContent title="Origine" value={infos.origine} /> : null}
           {infos.sortie ? <LabeledContent title="Sortie" value={infos.sortie} /> : null}
           <LabeledContent title="Boutique du jour" value={infos.boutique} />
-          <Button title={infos.souhait === "skin" ? "Retirer des souhaits" : "Ajouter aux souhaits"} action={infos.onSouhait} />
+          <BoutonSouhait dedans={infos.souhait === "skin"} libelle={infos.souhait === "skin" ? "Retirer des souhaits" : "Ajouter aux souhaits"} onAppui={infos.onSouhait} />
           {infos.souhait === "arme" ? (
             <Text font="footnote" foregroundStyle="secondaryLabel">Déjà dans tes souhaits par son arme entière.</Text>
           ) : null}
@@ -578,7 +582,7 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
         </Section>
       ) : null}
       {variante && variantes.length >= 2 ? (
-        <Section title="Variantes">
+        <Section title="Variantes" listRowBackground={<Rectangle fill={SURFACE} />}>
           <ScrollView axes="horizontal" scrollIndicator="hidden">
             <HStack spacing={8}>
               {variantes.map((v, i) => (
@@ -600,7 +604,7 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
         </Section>
       ) : null}
       {videoVariante || videosNiveaux.length > 0 ? (
-        <Section title="Vidéos">
+        <Section title="Vidéos" listRowBackground={<Rectangle fill={SURFACE} />}>
           {videoVariante ? (
             <RangeeVideo
               key={videoVariante.cle}
@@ -616,7 +620,7 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
         </Section>
       ) : null}
       {attente ? (
-        <Section>
+        <Section listRowBackground={<Rectangle fill={SURFACE} />}>
           <Text foregroundStyle="secondaryLabel">Variantes après la prochaine mise à jour de la boutique.</Text>
         </Section>
       ) : null}

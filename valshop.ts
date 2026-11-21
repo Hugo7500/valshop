@@ -4,6 +4,7 @@ import {
   type BoutiqueLue, type IssueLecture, type OrigineVerrou,
 } from "./garde-fou"
 import { comparer, type Alerte } from "./alertes"
+import { contenuOffres } from "./widgets-lecture"
 import { catalogueAReconstruire, construireCatalogue, lireListe, type Arme, type Skin, type Souhait } from "./souhaits"
 import {
   decrireAccessoire, decrireObjet, entreeValide, estNiveau, lireObjetsBundle, type EntreeAccessoire,
@@ -20,6 +21,7 @@ import {
 } from "./prix-retenus"
 import { TABLE_REFERENCE } from "./prix-reference"
 import { lireOrigines } from "./origines"
+import { DELAI_SOLDE_MS, contenuSolde, deciderSolde, ligneJournalSolde, lireSolde, lireSoldes, type IssueSolde } from "./solde"
 import {
   BORNE_IMAGE, BORNE_JSON, BORNE_RIOT, JOURNAL_ENORME, JOURNAL_MAX, estUuid, imageAdmise, jsonBorne, journalTourne, shardDe, tailleAdmise, tailleAnnoncee, texteBorne,
   versionClient,
@@ -68,6 +70,14 @@ const ACCESSOIRES_FILE = DIR + "/accessoires.json"
  * comptes des Réglages (ecrireEtatPrix). Données de l'app : jamais dans le paquet.
  */
 const ORIGINES_FILE = DIR + "/origines.json"
+/**
+ * Entrée 17 de epic-boutique-visuels : le solde du compte (VP, Radianite, Crédits Kingdom), lu chez Riot après chaque boutique
+ * écrite, ou seul sur un appui sur « Lire la boutique » (rangerSolde) ; lu par l'onglet Boutique ; effacé avec shop.json à la
+ * déconnexion et au changement de compte. Donnée du compte : sur l'iPhone seulement, jamais au journal ni dans le paquet.
+ */
+const SOLDE_FILE = DIR + "/solde.json"
+/** Lot 2 des widgets : le skin et l'arme de chaque offre du jour, pour le widget Souhaits (widgets-lecture.ts, contenuOffres). */
+const SOUHAITS_WIDGET_FILE = DIR + "/widget-souhaits.json"
 
 /**
  * Ticket 8.9 : la table de référence du paquet (prix-reference.ts, module de données importé : rien à lire sur le disque, ni
@@ -890,18 +900,41 @@ async function echecRiot(etape: string, res: { status: number; headers?: any; te
   return new EchecRiot(etape, res.status, resumeErreurRiot(corps))
 }
 
-async function fetchShop(tokens: Tokens, j: Jeton) {
+/**
+ * Le jeton d'entitlement du compte, que demandent la boutique et le portefeuille (entrée 17 de epic-boutique-visuels : sorti
+ * de fetchShop tel quel). Ticket 7.8 (F2) : chaque requête qui porte Authorization ou l'entitlement ne suit aucune redirection
+ * (elle emporterait ses en-têtes ailleurs), et chaque corps est borné (securite.ts). Un jeton d'une autre forme : une erreur.
+ */
+async function lireEntitlement(tokens: Tokens, j: Jeton): Promise<string> {
   const auth = { Authorization: "Bearer " + tokens.access }
   const json = { "Content-Type": "application/json" }
-
-  // Ticket 7.8 (F2) : chaque requête qui porte Authorization ou l'entitlement ne suit aucune redirection (elle emporterait ses
-  // en-têtes ailleurs), et chaque corps est borné (securite.ts).
   const entRes = await requete(j, "https://entitlements.auth.riotgames.com/api/token/v1", {
     method: "POST", headers: { ...auth, ...json }, body: "{}", timeout: DELAI_REQUETE_S, handleRedirect: async () => null,
   })
   if (!entRes.ok) throw await echecRiot("entitlements", entRes)
   const entitlements = (await jsonBorne(entRes, BORNE_RIOT))?.entitlements_token
   if (typeof entitlements !== "string" || !/^[\w.-]{1,8192}$/.test(entitlements)) throw new Error("entitlements : jeton inattendu")
+  return entitlements
+}
+
+/**
+ * Entrée 17 : les en-têtes d'une lecture du portefeuille (`pd.{shard}.a.pvp.net`), ceux de la boutique sans `Content-Type`
+ * (aucun corps) ; ils ne vont jamais au journal.
+ */
+function entetesRiot(tokens: Tokens, entitlements: string, version: string): Record<string, string> {
+  return {
+    Authorization: "Bearer " + tokens.access,
+    "X-Riot-Entitlements-JWT": entitlements,
+    "X-Riot-ClientPlatform": CLIENT_PLATFORM,
+    "X-Riot-ClientVersion": version,
+  }
+}
+
+async function fetchShop(tokens: Tokens, j: Jeton) {
+  const auth = { Authorization: "Bearer " + tokens.access }
+  const json = { "Content-Type": "application/json" }
+
+  const entitlements = await lireEntitlement(tokens, j)
 
   const puuid = await getPuuid(tokens.access, j)
 
@@ -934,7 +967,133 @@ async function fetchShop(tokens: Tokens, j: Jeton) {
     body: "{}",
   })
   if (!res.ok) throw await echecRiot("storefront", res)
-  return { shop: await jsonBorne(res, BORNE_RIOT), region: region as string, shard, version, puuid }
+  // Entrée 17 : les en-têtes servent aussi au portefeuille (rangerSolde), après la boutique écrite.
+  return { shop: await jsonBorne(res, BORNE_RIOT), region: region as string, shard, version, puuid, entetes: entetesRiot(tokens, entitlements, version) }
+}
+
+/** Délai de la requête du portefeuille, en secondes : la dernière de la lecture, elle ne doit pas en retenir longtemps la fin. */
+const DELAI_SOLDE_S = 10
+
+/**
+ * Entrée 17 : le dernier solde demandé à Riot par cette exécution (ms depuis l'epoch), lu ou non ; avec le dernier solde lu
+ * (solde.json), il espace les relectures du seul solde (deciderSolde). null : aucun.
+ */
+let dernierEssaiSolde: number | null = null
+
+/** Le texte d'un échec du solde pour le journal : le message de l'erreur, chemins, UUID et `secrets` masqués (messageHote). */
+function raisonSolde(e: unknown, secrets: readonly (string | null | undefined)[] = []): string {
+  return messageHote(e instanceof Error ? e.message : texteErreurJournal(e), [...secrets, puuidCourant])
+}
+
+/**
+ * Solde du compte (entrée 17 de epic-boutique-visuels) : le portefeuille de Riot (`GET pd.{shard}.a.pvp.net/store/v1/wallet/{puuid}`,
+ * les en-têtes de la boutique, aucune redirection suivie, corps borné), lu strictement (lireSoldes de solde.ts : un entier
+ * positif ou nul par devise reconnue, sinon rien pour elle) et rangé dans solde.json avec l'heure de la lecture et `boutique`,
+ * l'`updatedAt` de la boutique sous laquelle il est lu ; écriture sûre, verrou tenu. Appelée à la fin d'une lecture, la boutique
+ * écrite et ses prix rangés, ou seule (relireSolde). Un échec (réponse hors 2xx, réseau, corps illisible ou d'une autre forme, aucune devise lisible,
+ * écriture) ne touche ni la boutique ni le widget ni l'ancien solde.json, que l'écran ne montre que sous sa propre boutique :
+ * une ligne au journal (étape et statut, nom des devises ; jamais un montant, un en-tête, le PUUID ni le corps). Rend vrai si
+ * le solde est gardé. Ne lève jamais.
+ */
+async function rangerSolde(shard: string, puuid: string, entetes: Record<string, string>, boutique: string, j: Jeton): Promise<boolean> {
+  try {
+    dernierEssaiSolde = Date.now()
+    const res = await requete(j, `https://pd.${shard}.a.pvp.net/store/v1/wallet/${puuid}`, {
+      headers: entetes, timeout: DELAI_SOLDE_S, handleRedirect: async () => null,
+    })
+    if (!res.ok) throw await echecRiot("wallet", res)
+    // Le corps lu d'abord : une coupure en route reste un échec réseau (son message), un corps qui n'est pas du JSON une réponse illisible.
+    const texte = await texteBorne(res, BORNE_RIOT)
+    let corps: unknown
+    try {
+      corps = JSON.parse(texte)
+    } catch {
+      throw new Error("wallet : réponse illisible")
+    }
+    const lus = lireSoldes(corps)
+    if ("refus" in lus) throw new Error("wallet : " + lus.refus)
+    if (!(await encore(j))) return false
+    try {
+      // Écriture sûre (stockage.ts) : un temporaire, puis le remplacement ; une écriture coupée ne tronque jamais l'ancien.
+      ecrireSur(SOLDE_FILE, contenuSolde(lus.soldes, new Date(Date.now()).toISOString(), boutique))
+    } catch (e) {
+      await note(`Solde non gardé (${raisonSolde(e, [puuid])}).`)
+      return false
+    }
+    await note(ligneJournalSolde(lus))
+    return true
+  } catch (e) {
+    try {
+      await note(`Solde non lu (${raisonSolde(e, [puuid])}).`)
+    } catch { /* journal indisponible : rien */ }
+    return false
+  }
+}
+
+/**
+ * Entrée 17 : la relecture du seul solde, sur un appui sur « Lire la boutique » quand la boutique du jour est déjà en cache
+ * (`cache`) : trop tôt (deciderSolde : moins de DELAI_SOLDE_MS depuis le dernier solde lu ou demandé), aucune requête ; sinon
+ * la reconnexion silencieuse, l'entitlement, puis le portefeuille (rangerSolde), la région et la version du client reprises
+ * de la boutique gardée (ni riot-geo ni valorant-api : ValShop ne garde aucun jeton, d'où ces trois requêtes). Verrou tenu par
+ * l'appelant. Un échec ne touche ni etat.json ni le widget et ne notifie rien : la session ne se juge qu'à une lecture de la
+ * boutique. Ne lève jamais.
+ */
+async function relireSolde(cache: BoutiqueLue | null, hasCookies: boolean, j: Jeton): Promise<IssueSolde> {
+  const nonRelu = async (raison: string, reseau: boolean = false): Promise<IssueSolde> => {
+    await note(`Solde non relu (${raison}).`)
+    return { genre: "non-relu", reseau }
+  }
+  try {
+    const now = Date.now()
+    let garde: string | null = null
+    try {
+      if (FileManager.existsSync(SOLDE_FILE)) garde = await FileManager.readAsString(SOLDE_FILE)
+    } catch { /* illisible : comme absent */ }
+    const decision = deciderSolde(now, lireSolde(garde)?.luA ?? null, dernierEssaiSolde)
+    if (!decision.lire) {
+      await note(`Solde : déjà demandé il y a moins de ${DELAI_SOLDE_MS / 60_000} min, aucune requête.`)
+      return { genre: "trop-tot", possible: decision.possible }
+    }
+    const c = cache as { updatedAt?: unknown; region?: unknown; version?: unknown } | null
+    const boutique = typeof c?.updatedAt === "string" && c.updatedAt !== "" ? c.updatedAt : null
+    const shard = shardDe(c?.region)
+    const version = versionClient(c?.version)
+    if (boutique === null || shard === null || version === null) return await nonRelu("boutique gardée sans heure, région ou version lisible")
+    if (!hasCookies) return await nonRelu("aucune session au trousseau")
+    await note("Solde : relecture seule (boutique du jour en cache).")
+    const avant = dernierEssaiSolde
+    dernierEssaiSolde = now
+    const tokens = await reauth(j)
+    if (!(await encore(j))) return { genre: "non-relu", reseau: false }
+    if (!tokens) {
+      // Sans aucune réponse de Riot, rien ne lui a été demandé pour de bon : l'essai ne compte pas.
+      if (reseauIndisponible) dernierEssaiSolde = avant
+      return await nonRelu(reseauIndisponible ? "réseau indisponible" : "reconnexion refusée", reseauIndisponible)
+    }
+    const entitlements = await lireEntitlement(tokens, j)
+    const puuid = await getPuuid(tokens.access, j)
+    const relu = await rangerSolde(shard, puuid, entetesRiot(tokens, entitlements, version), boutique, j)
+    return relu ? { genre: "relu" } : { genre: "non-relu", reseau: false }
+  } catch (e) {
+    try { await note(`Solde non relu (${raisonSolde(e)}).`) } catch { /* journal indisponible : rien */ }
+    return { genre: "non-relu", reseau: false }
+  }
+}
+
+/**
+ * Entrée 17 : le solde gardé effacé avec la boutique (déconnexion, changement de compte), le temporaire d'une écriture coupée
+ * compris ; l'essai de cette exécution oublié avec lui. Un échec se journalise, rien de plus : un solde resté là ne s'affiche
+ * jamais sous une autre boutique (ligneSolde de solde.ts).
+ */
+async function effacerSolde() {
+  dernierEssaiSolde = null
+  for (const chemin of [SOLDE_FILE, SOLDE_FILE + ".tmp"]) {
+    try {
+      if (FileManager.existsSync(chemin)) FileManager.removeSync(chemin)
+    } catch (e) {
+      await note("solde.json non effacé (" + masquerErreur(e) + ") : il ne s'affichera pas sous une autre boutique.")
+    }
+  }
 }
 
 /** Liste des offres chez HenrikDev (ticket 8.6) : même forme que l'ancienne `store/v1/offers` de Riot. */
@@ -1369,9 +1528,10 @@ async function lireSouhaits(): Promise<Souhait[]> {
 /**
  * Comment une lecture est lancée : `login`, fenêtre de connexion possible (premier plan) ;
  * `par`, l'origine écrite dans le verrou ; `bouton`, lancée par « Lire la boutique » (entrée 10) :
- * l'écran dit l'issue, aucune notification d'échec ni de session expirée.
+ * l'écran dit l'issue, aucune notification d'échec ni de session expirée ; `solde` (entrée 17 de epic-boutique-visuels),
+ * lancée par un appui : la boutique du jour déjà en cache, le seul solde est relu.
  */
-type ModeLecture = { login: boolean; par: OrigineVerrou; bouton: boolean }
+type ModeLecture = { login: boolean; par: OrigineVerrou; bouton: boolean; solde: boolean }
 
 /** Ce que rend une lecture : son issue (le bouton) et sa ligne de résumé (`refresh`, inchangée). */
 type Lecture = { issue: IssueLecture; resume: string }
@@ -1428,7 +1588,13 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
     if (deciderLecture(now, cache) === "cache") {
       await note(`garde-fou : cache (lue à ${heure(cache?.updatedAt)}, reset à ${heure(cache?.daily?.resetAt)})`)
       const resetAt = cache?.daily?.resetAt
-      return { issue: { genre: "a-jour", resetAt: typeof resetAt === "string" ? resetAt : null }, resume: "boutique du jour en cache" }
+      // Entrée 17 de epic-boutique-visuels : sur un appui, le seul solde est relu sous cette boutique (il change plus souvent
+      // qu'elle) ; jamais depuis ↻, Raccourcis ni la lecture automatique de l'ouverture : l'issue reste alors celle d'avant.
+      const solde = mode.solde ? await relireSolde(cache, hasCookies, j) : null
+      return {
+        issue: { genre: "a-jour", resetAt: typeof resetAt === "string" ? resetAt : null, ...(solde !== null ? { solde } : {}) },
+        resume: "boutique du jour en cache",
+      }
     }
     await note("garde-fou : lecture")
 
@@ -1475,7 +1641,7 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
     }
 
     try {
-      const { shop, region, shard, version, puuid } = await fetchShop(tokens, j)
+      const { shop, region, shard, version, puuid, entetes } = await fetchShop(tokens, j)
       const { data, niveaux, cat } = await buildShopJson(shop, region, version, j)
       // Alertes : comparées au fichier précédent et à la liste de souhaits avant
       // d'écraser le fichier, envoyées après l'écriture réussie seulement (partie
@@ -1491,6 +1657,15 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
       // Le compte de cette lecture, pour les stats : changement de compte compris.
       if (!(await encore(j))) return arret()
       await garderIdentite(puuid, region)
+
+      // Lot 2 des widgets : le skin et l'arme de chaque offre du jour, pour le widget Souhaits (widget-souhaits.json), avant le
+      // rechargement des widgets ; un échec n'y change rien (le widget Souhaits montre alors la boutique).
+      if (!(await encore(j))) return arret()
+      try {
+        await FileManager.writeAsString(SOUHAITS_WIDGET_FILE, contenuOffres(data, niveaux))
+      } catch (e) {
+        try { await note(`Offres du widget Souhaits non écrites (${masquerErreur(e)}).`) } catch { /* journal indisponible : rien */ }
+      }
 
       Widget.reloadAll()
 
@@ -1513,6 +1688,11 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
         const retenus = await rangerPrixVus(shop, data.updatedAt, ref, j)
         if (await encore(j)) await ecrireEtatPrix(cat, data, data.updatedAt, issue, retenus, ref, j)
       }
+
+      // Entrée 17 de epic-boutique-visuels : le solde du compte, une requête, en dernier : après la boutique écrite, le widget
+      // rechargé, les alertes envoyées et les prix rangés, pour ne rien prendre à ce que la lecture faisait avant lui (le budget
+      // d'un ↻). Un échec n'y change rien ; verrou repris ou budget passé entre-temps : rien de demandé, la lecture reste « lue ».
+      if (await encore(j)) await rangerSolde(shard, puuid, entetes, data.updatedAt, j)
 
       const names = data.daily.items.map((i: any) => i.name).join(", ")
 
@@ -1554,17 +1734,18 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
  * @returns une ligne de résumé.
  */
 export async function refresh(allowLogin: boolean): Promise<string> {
-  return (await lire({ login: allowLogin, par: allowLogin ? "app" : "arriere-plan", bouton: false })).resume
+  return (await lire({ login: allowLogin, par: allowLogin ? "app" : "arriere-plan", bouton: false, solde: false })).resume
 }
 
 /**
  * Le bouton « Lire la boutique » de l'onglet Boutique (entrée 10) : la lecture de ↻, garde-fou et
  * verrou compris, au premier plan mais sans fenêtre de login, et son issue ; ne lève jamais (une
- * erreur levée : « echec », une ligne au journal).
+ * erreur levée : « echec », une ligne au journal). Entrée 17 de epic-boutique-visuels : `solde`, vrai pour un appui
+ * (jamais pour la lecture automatique de l'ouverture) : la boutique déjà à jour, le seul solde est relu, et l'issue le dit.
  */
-export async function lireBoutique(): Promise<IssueLecture> {
+export async function lireBoutique(solde: boolean = false): Promise<IssueLecture> {
   try {
-    return (await lire({ login: false, par: "app", bouton: true })).issue
+    return (await lire({ login: false, par: "app", bouton: true, solde })).issue
   } catch (e) {
     await note("Lire la boutique : erreur (" + masquerErreur(e) + ").")
     return { genre: "echec" }
@@ -1691,7 +1872,7 @@ export async function nettoyerCookiesPersistants(): Promise<void> {
  * Change de compte (CAP-14), au premier plan : page de login Riot dans une fenêtre
  * web éphémère ; à la réussite seulement, sous le verrou, le trousseau passe au nouveau
  * compte (ticket 7.8 : la fenêtre web persistante n'en reçoit rien, ses cookies Riot
- * d'avant sont retirés), et `shop.json` et `etat.json`
+ * d'avant sont retirés), et `shop.json`, `solde.json` (entrée 17 de epic-boutique-visuels) et `etat.json`
  * de l'ancien sont effacés ; le verrou relâché, une lecture normale
  * (`refresh(true)`) écrit la boutique du nouveau compte et recharge le widget.
  * Login abandonné : rien ne change. Catalogue, icônes, liste de souhaits et
@@ -1737,12 +1918,13 @@ export async function changerDeCompte(): Promise<string> {
     // Seul passe-droit au garde-fou : sans boutique en cache, la lecture qui suit
     // interroge Riot. etat.json, s'il existait, parlait de l'ancien compte ; le compte des
     // stats aussi : la lecture qui suit garde le nouveau (ses données restent, par PUUID).
-    await note("changement de compte : effacement de shop.json, etat.json et du compte des stats de l'ancien compte.")
+    await note("changement de compte : effacement de shop.json, solde.json, etat.json et du compte des stats de l'ancien compte.")
     try {
       if (FileManager.existsSync(SHOP_FILE)) FileManager.removeSync(SHOP_FILE)
     } catch (e) {
       await note("shop.json non effacé (" + masquerErreur(e) + ") : le garde-fou peut garder l'ancienne boutique jusqu'au reset.")
     }
+    await effacerSolde()
     await effacerEtat()
     try {
       effacerCompte()
@@ -1762,7 +1944,7 @@ export async function changerDeCompte(): Promise<string> {
  * Se déconnecter de Riot (epic-installation-ami, entrée 11), au premier plan, l'app fermée, sans aucune requête : sous le
  * verrou des lectures, la session Riot est retirée du trousseau, relu pour preuve (s'il la porte encore, rien d'autre ne
  * change, et une notification le dit) ; puis ce qui dit qu'un compte est connecté est effacé : les cookies Riot du magasin
- * partagé des vues web, `shop.json`, `etat.json` et le compte des stats ; le widget est rechargé. Catalogue, icônes, liste de
+ * partagé des vues web, `shop.json`, `solde.json` (entrée 17 de epic-boutique-visuels), `etat.json` et le compte des stats ; le widget est rechargé. Catalogue, icônes, liste de
  * souhaits, journal, prix, clé HenrikDev et historique des parties (un dossier par compte) ne sont jamais touchés : une
  * reconnexion au même compte retrouve son historique. La session n'est pas fermée chez Riot.
  * @returns vrai si la session n'est plus au trousseau.
@@ -1793,12 +1975,13 @@ export async function seDeconnecter(): Promise<boolean> {
       ? `déconnexion : fenêtre web sans cookie Riot (${r.retires} retirés).`
       : `⚠️ déconnexion : ${r.retires} cookies Riot retirés de la fenêtre web sur ${r.trouves} (${r.echecs.join(", ")}).`)
 
-    await note("déconnexion : effacement de shop.json, etat.json et du compte des stats.")
+    await note("déconnexion : effacement de shop.json, solde.json, etat.json et du compte des stats.")
     try {
       if (FileManager.existsSync(SHOP_FILE)) FileManager.removeSync(SHOP_FILE)
     } catch (e) {
       await note("shop.json non effacé (" + masquerErreur(e) + ") : l'app et le widget montrent encore l'ancienne boutique.")
     }
+    await effacerSolde()
     await effacerEtat()
     try {
       effacerCompte()
@@ -1824,5 +2007,6 @@ export function iconeEnCache(id: string, url: string | null): Promise<string | n
 // Pour index.tsx, la fin du journal ; pour les écrans (widget.tsx, vue.tsx), les chemins des fichiers qu'ils lisent,
 // et celui de wishlist.json, que la vue écrit aussi ; pour la collecte des stats (collecte.ts), le journal, les
 // cookies du trousseau, lus sans requête pour en tirer le PUUID, shop.json, pour sa région, et catalog.json, pour
-// les rôles des agents (section `agents`, que `catalog()` garde).
-export { tailJournal, note, loadCookies, SHOP_FILE, ETAT_FILE, CATALOG, WISHLIST_FILE, PRIX_FILE, PRIX_VUS_FILE, ETAT_PRIX_FILE, ACCESSOIRES_FILE, ORIGINES_FILE }
+// les rôles des agents (section `agents`, que `catalog()` garde) ; pour l'onglet Boutique, solde.json (entrée 17 de
+// epic-boutique-visuels).
+export { tailJournal, note, loadCookies, SHOP_FILE, ETAT_FILE, CATALOG, WISHLIST_FILE, PRIX_FILE, PRIX_VUS_FILE, ETAT_PRIX_FILE, ACCESSOIRES_FILE, ORIGINES_FILE, SOLDE_FILE }
