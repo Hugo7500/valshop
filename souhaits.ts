@@ -94,7 +94,7 @@ export function normaliser(s: string): string {
 
 /**
  * Construit `levels`, `skins` et `weapons` à partir du `data` de
- * `/v1/weapons?language=fr-FR` (armes → `skins[]` → `levels[]`) et de celui de
+ * `/v1/weapons?language=<langue des noms>` (armes → `skins[]` → `levels[]`) et de celui de
  * `/v1/contenttiers` (`uuid` → `highlightColor` en RRGGBBAA, six premiers
  * caractères gardés). Un niveau prend le nom et l'image de son skin quand il n'en
  * a pas, et la couleur de rareté de son skin (null si inconnue). Pour la fiche d'un
@@ -105,7 +105,7 @@ export function normaliser(s: string): string {
  * celui d'un catalogue d'avant CAP-25 (catalogueAReconstruire). Pour le Catalogue
  * (ticket 8.4) : `tier` et `theme` de chaque skin (toujours écrits, null s'ils
  * manquent), `tiers` (libellé, rang et couleur de chaque palier, de `paliers`) et
- * `themes` (libellé de chaque thème, du `data` de `/v1/themes?language=fr-FR`,
+ * `themes` (libellé de chaque thème, du `data` de `/v1/themes?language=<langue des noms>`,
  * vide sans lui). Un objet sans uuid est ignoré ; une entrée absente ou inattendue
  * donne des sections vides, jamais une erreur.
  */
@@ -185,6 +185,16 @@ export function catalogueAncien(cat: unknown): boolean {
   return !estObjet(cat) || !estObjet(cat.levels) || !estObjet(cat.skins) || !estObjet(cat.weapons)
 }
 
+
+
+
+
+
+export function langueCatalogue(cat: unknown): string {
+  const l = champ(cat, "langue")
+  return typeof l === "string" && l !== "" ? l : "fr-FR"
+}
+
 /**
  * Catalogue à reconstruire à la lecture de boutique suivante, même sous la même version :
  * ancien ou absent (catalogueAncien), d'avant CAP-25, dont un skin au moins n'a pas le
@@ -193,8 +203,10 @@ export function catalogueAncien(cat: unknown): boolean {
  * La liste de souhaits, elle, ne regarde que catalogueAncien : elle cherche dans un
  * catalogue d'un format antérieur en attendant sa reconstruction.
  */
-export function catalogueAReconstruire(cat: unknown): boolean {
+export function catalogueAReconstruire(cat: unknown, langue?: string): boolean {
   if (catalogueAncien(cat)) return true
+
+  if (langue !== undefined && langueCatalogue(cat) !== langue) return true
   const c = cat as { skins: Record<string, unknown>; tiers?: unknown; themes?: unknown }
   if (!estObjet(c.tiers) || !estObjet(c.themes)) return true
   return Object.values(c.skins).some((s) => !Array.isArray(champ(s, "chromas")) || !estObjet(s) || !("tier" in s) || !("theme" in s))
@@ -277,6 +289,22 @@ export function lireListe(contenu: string | null | undefined): Souhait[] {
     liste.push({ kind, id, name })
   }
   return liste
+}
+
+
+
+
+
+
+
+export function nomDuSouhait(e: Souhait, cat: unknown, langue: string): string {
+  if (catalogueAncien(cat) || langueCatalogue(cat) !== langue) return e.name
+  const section = champ(cat, e.kind === "skin" ? "skins" : "weapons")
+  const entree = estObjet(section) && Object.prototype.hasOwnProperty.call(section, e.id) ? section[e.id] : undefined
+  const nom = chaine(champ(entree, "name"))
+  if (nom === null) return e.name
+  const blancs = (x: string) => x.replace(/\s+/g, " ").trim()
+  return blancs(nom) === blancs(e.name) ? e.name : nom
 }
 
 /**

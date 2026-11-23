@@ -17,8 +17,9 @@ import { VERSION_REDUCTION, depensesDeV2, reduirePartie, type CumulAgent, type D
 import { SANS_PRO_FORCE, creerMaintien, lirePro, type FinMaintien, type Pro, type TacheMaintenue } from "./pro"
 import { PARTIES_AVANT_TROU, conclure, depart, examiner, type Fin, type Traitee, type Vue } from "./reprise"
 import {
-  lireRessources, sansImages, sectionDeValorantApi, sectionsARelire, versionDuJeu, type NomRessource, type Ressources,
+  SECTIONS_NOMMEES, lireRessources, sansImages, sectionDeValorantApi, sectionsARelire, versionDuJeu, type NomRessource, type Ressources,
 } from "./ressources"
+import { langueDesNoms } from "./langue"
 import {
   cheminIndex, ecrireImage, ecrireMeta, ecrirePartie, ecrireRang, ecrireRr, ecrireSemaine, ecrireSur, effacerIndex, fichiersCumuls,
   fichiersParties, indexPresent, lireCompte, historiquePresent, imagePresente, importIci, lireCumuls, lireHistorique, lireJson,
@@ -112,17 +113,20 @@ const BORNE_ERREUR = 64 * 1024
 const DELAI_PAGE = 90
 /** Rôles des agents jouables sur valorant-api, libellés anglais (sa langue par défaut). */
 const AGENTS_VALORANT_API = "https://valorant-api.com/v1/agents?isPlayableCharacter=true"
-/** Ressources des stats (entrée 9) : où valorant-api donne chaque section, et le délai de sa requête, en secondes. */
-const RESSOURCES_VALORANT_API: Record<NomRessource, { adresse: string; delai: number }> = {
+
+
+
+
+const RESSOURCES_VALORANT_API: Record<NomRessource, { adresse: (l: string) => string; delai: number }> = {
   // Callouts en anglais, sa langue par défaut : « A Main » de la maquette.
-  cartes: { adresse: "https://valorant-api.com/v1/maps", delai: DELAI_REQUETE },
+  cartes: { adresse: () => "https://valorant-api.com/v1/maps", delai: DELAI_REQUETE },
 
-  paliers: { adresse: "https://valorant-api.com/v1/competitivetiers?language=fr-FR", delai: DELAI_REQUETE },
+  paliers: { adresse: (l) => `https://valorant-api.com/v1/competitivetiers?language=${l}`, delai: DELAI_REQUETE },
 
-  armes: { adresse: "https://valorant-api.com/v1/weapons", delai: 40 },
-  // Ticket 4.52 : les noms fr-FR des capacités (par emplacement) et les dates des actes.
-  capacites: { adresse: "https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=fr-FR", delai: DELAI_REQUETE },
-  saisons: { adresse: "https://valorant-api.com/v1/seasons", delai: DELAI_REQUETE },
+  armes: { adresse: () => "https://valorant-api.com/v1/weapons", delai: 40 },
+  // Ticket 4.52 : les noms des capacités (par emplacement), dans la langue des noms, et les dates des actes.
+  capacites: { adresse: (l) => `https://valorant-api.com/v1/agents?isPlayableCharacter=true&language=${l}`, delai: DELAI_REQUETE },
+  saisons: { adresse: () => "https://valorant-api.com/v1/seasons", delai: DELAI_REQUETE },
 }
 /** Délai du téléchargement d'une image des ressources, en secondes, comme celui d'une icône de la boutique. */
 const DELAI_IMAGE = 20
@@ -547,7 +551,7 @@ function resumeRessource(nom: NomRessource, section: Record<string, unknown>): s
  * comprise) ou d'écriture : `arret`. Un message de l'hôte va au journal sans chemin. Ne lève pas, hors une erreur que
  * rien ne prévoit (rangerRessources la tient).
  */
-async function relireRessource(nom: NomRessource, version: string | null, debut: number, cout: CoutRessources, secrets: readonly string[]): Promise<IssueRessource> {
+async function relireRessource(nom: NomRessource, version: string | null, langue: string, debut: number, cout: CoutRessources, secrets: readonly string[]): Promise<IssueRessource> {
   const echec = (raison: string, arret: boolean): IssueRessource => ({
     rangee: false, arret,
     ligne: `stats : ressources des stats : ${nom} non ${accorde(nom, "rangé")} (${raison}), ${accorde(nom, "relu")} à la prochaine collecte`
@@ -558,7 +562,7 @@ async function relireRessource(nom: NomRessource, version: string | null, debut:
   cout.requetes++
   let res: Awaited<ReturnType<typeof fetch>>
   try {
-    res = await fetch(source.adresse, { timeout: source.delai })
+    res = await fetch(source.adresse(langue), { timeout: source.delai })
   } catch {
     return echec("valorant-api sans réponse", true)
   }
@@ -633,8 +637,11 @@ async function relireRessource(nom: NomRessource, version: string | null, debut:
   if (lu.etat === "illisible" || (lu.etat === "ok" && !estObjet(lu.valeur))) return echec("catalog.json illisible, laissé tel quel", true)
   const sections: Record<string, any> = lu.etat === "ok" && estObjet(lu.valeur) ? lu.valeur : {}
   const versions: Record<string, unknown> = estObjet(sections.ressources) ? sections.ressources : {}
+
+  const langues: Record<string, unknown> = estObjet(sections.languesRessources) ? sections.languesRessources : {}
+  const avecLangue = SECTIONS_NOMMEES.includes(nom) ? { languesRessources: { ...langues, [nom]: langue } } : {}
   try {
-    ecrireSur(CATALOG, JSON.stringify({ ...sections, [nom]: section, ressources: { ...versions, [nom]: version } }))
+    ecrireSur(CATALOG, JSON.stringify({ ...sections, [nom]: section, ressources: { ...versions, [nom]: version }, ...avecLangue }))
   } catch (e) {
     return echec("catalog.json non écrit : " + sansIdentifiant(e, secrets), true)
   }
@@ -665,14 +672,16 @@ async function rangerRessources(debut: number, secrets: readonly string[]): Prom
     const boutique = lireJson(SHOP_FILE)
     const version = versionDuJeu(boutique.etat === "ok" ? boutique.valeur : null, catalogue)
     const inconnue = version === null ? " (version du jeu inconnue)" : ""
-    const aRelire = sectionsARelire(catalogue, version)
+
+    const langue = langueDesNoms()
+    const aRelire = sectionsARelire(catalogue, version, langue)
     if (aRelire.length === 0) {
       await note(`stats : ressources des stats à jour${inconnue}, aucune requête.`)
       return 0
     }
     let rangees = 0
     for (const nom of aRelire) {
-      const issue = await relireRessource(nom, version, debut, cout, secrets)
+      const issue = await relireRessource(nom, version, langue, debut, cout, secrets)
       await note(issue.ligne)
       if (issue.rangee) rangees++
       if (issue.arret) break

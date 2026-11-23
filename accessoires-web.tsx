@@ -1,6 +1,6 @@
 import { ProgressView, Rectangle, Text, VStack, WebView, ZStack, fetch, useEffect, useRef, useState } from "scripting"
 import {
-  PONT_ACCESSOIRES, SOURCES_ACCESSOIRES, TYPES_ACCESSOIRES, boutiqueAccessoiresConnue, cacheARefaire, contenuCache, lignesAccessoires, lireAccessoires, lireCache, pageAccessoires,
+  PONT_ACCESSOIRES, TYPES_ACCESSOIRES, sourcesAccessoires, boutiqueAccessoiresConnue, cacheARefaire, contenuCache, lignesAccessoires, lireAccessoires, lireCache, pageAccessoires,
   type Accessoire, type TypeAccessoire,
 } from "./catalogue-accessoires"
 import { lireTableDuPaquet, tableDesOrigines } from "./catalogue-web"
@@ -11,6 +11,7 @@ import { lirePrixVus } from "./prix-retenus"
 import { BORNE_JSON, texteBorne } from "./securite"
 import { ecrireSur } from "./stockage"
 import { ACCESSOIRES_FILE, PRIX_VUS_FILE, note } from "./valshop"
+import { langueDesNoms } from "./langue"
 
 
 
@@ -73,10 +74,12 @@ const NOMS: Record<TypeAccessoire, string> = { buddy: "porte-bonheur", spray: "t
  * Les cinq listes publiques de valorant-api (SOURCES_ACCESSOIRES), l'une après l'autre, sans cookie, clé ni en-tête, corps
  * bornés (securite.ts) : les accessoires lus ; un échec lève (la liste et son statut, jamais un corps).
  */
-async function relireListes(): Promise<Accessoire[]> {
+async function relireListes(langue: string): Promise<Accessoire[]> {
   const reponses: Partial<Record<TypeAccessoire, unknown>> = {}
+
+  const sources = sourcesAccessoires(langue)
   for (const type of TYPES_ACCESSOIRES) {
-    const r = await fetch(SOURCES_ACCESSOIRES[type], { timeout: DELAI_LISTE_S })
+    const r = await fetch(sources[type], { timeout: DELAI_LISTE_S })
     if (!r.ok) throw new Error(`${NOMS[type]} HTTP ${r.status}`)
     let corps: unknown
     try {
@@ -86,7 +89,7 @@ async function relireListes(): Promise<Accessoire[]> {
     }
     reponses[type] = corps
   }
-  const liste = lireAccessoires(reponses)
+  const liste = lireAccessoires(reponses, langue)
   if (liste.length === 0) throw new Error("aucun accessoire dans les réponses")
   return liste
 }
@@ -103,18 +106,21 @@ let pages = 0
 async function preparer(shop: unknown): Promise<Prepare> {
   const version = (shop as { version?: unknown } | null)?.version
   let cache = lireCache(lireTexte(ACCESSOIRES_FILE))
-  if (cacheARefaire(cache, version)) {
+
+
+  const langue = langueDesNoms()
+  if (cacheARefaire(cache, version, langue)) {
     const t0 = Date.now()
     try {
-      const liste = await relireListes()
+      const liste = await relireListes(langue)
       const v = typeof version === "string" && version.length > 0 ? version : null
       const lueA = new Date().toISOString()
       try {
-        ecrireSur(ACCESSOIRES_FILE, contenuCache(v, lueA, liste))
+        ecrireSur(ACCESSOIRES_FILE, contenuCache(v, lueA, liste, langue))
       } catch (e) {
         dire(`[accessoires] catalogue lu mais non gardé (${messageHote(String(e), [])})`)
       }
-      cache = { version: v, lueA, elements: liste }
+      cache = { version: v, lueA, langue, elements: liste }
       dire(`[accessoires] catalogue lu de valorant-api : ${liste.length} accessoires en ${Date.now() - t0} ms`)
     } catch (e) {
       dire(`[accessoires] catalogue non lu (${messageHote(e instanceof Error ? e.message : String(e), [])})${cache !== null && cache.elements.length > 0 ? " : ancien catalogue gardé" : ""}`)

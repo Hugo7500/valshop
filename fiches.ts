@@ -114,11 +114,24 @@ export function lireFicheSkin(cat: unknown, niveau: string): FicheDeSkin | null 
  * « Glitchpop », arme « VANDAL » ; sans parenthèses, le libellé entier est le skin, sans arme.
  * Blancs autour retirés d'abord : valorant-api en laisse parfois un à la fin (« Vandal (XERØFANG) »).
  */
-export function separerNom(nom: string): { skin: string; weapon: string } {
+export function separerNom(nom: string, anglais = false): { skin: string; weapon: string } {
   const n = nom.trim()
   const m = n.match(/^(.*?)\s*\((.*)\)$/)
-  return m ? { skin: m[2], weapon: m[1].toUpperCase() } : { skin: n, weapon: "" }
+  if (m) return { skin: m[2], weapon: m[1].toUpperCase() }
+
+
+  if (anglais) {
+    const a = /^(.+?)\s+(\S+)$/.exec(n)
+    if (a && ARMES_ANGLAISES.has(a[2])) return { skin: a[1], weapon: a[2].toUpperCase() }
+  }
+  return { skin: n, weapon: "" }
 }
+
+/** Les armes à feu de valorant-api en en-US, telles qu'elles finissent le nom d'un skin (« Oni Phantom »). */
+const ARMES_ANGLAISES: ReadonlySet<string> = new Set([
+  "Classic", "Shorty", "Frenzy", "Ghost", "Bandit", "Sheriff", "Stinger", "Spectre", "Bucky", "Judge", "Bulldog", "Guardian",
+  "Phantom", "Vandal", "Marshal", "Outlaw", "Operator", "Ares", "Odin",
+])
 
 
 

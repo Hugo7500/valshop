@@ -1,10 +1,7 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "notes": [
-    "Ta collection : les skins et objets déjà à toi sont marqués « À TOI », et tous rangés dans « Ma collection ».",
-    "La fiche d'un skin dit combien de fois tu l'as vu dans ta boutique.",
-    "Partage l'image de ta boutique du jour en un appui.",
-    "ValShop parle anglais si ton iPhone est dans une autre langue (au choix dans les Réglages).",
-    "Changer de compte, se déconnecter et signaler un bug : dans les Réglages."
+    "En anglais, les noms des skins, armes, accessoires, rangs et capacités passent eux aussi en anglais (à la prochaine lecture de la boutique).",
+    "Ta liste de souhaits montre les noms à jour du jeu."
   ]
 }

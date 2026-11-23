@@ -1,19 +1,19 @@
-// Catalogue de tous les accessoires (ticket 8.10 de epic-boutique-visuels) : la part pure.
-//   - Lecture : les listes publiques de valorant-api en fr-FR (porte-bonheur `/v1/buddies`, tags `/v1/sprays`, cartes
-//     `/v1/playercards`, titres `/v1/playertitles`, flex `/v1/flex`) mises à plat en éléments (lireAccessoires), gardés dans
-//     accessoires.json (cache disque, au numéro de version du jeu de la boutique lue) ; chaque élément par l'uuid que vend la
-//     boutique (un porte-bonheur : son premier niveau), son nom, son image, et pour un tag animé l'adresse de son animation.
-//   - Prix (prixDeLAccessoire), mêmes règles et même ordre que les skins (ticket 8.9) : boutique d'accessoires du jour, puis
-//     objet d'un bundle en vedette (prix vus à la lecture même de cette boutique, prix-vus.json, devise exacte), puis le dernier
-//     prix retenu, puis la table de référence du paquet, sinon « Prix non communiqué par Riot ». Jamais un prix déduit.
-//   - Page : le HTML de l'écran (accessoires-web.tsx), rendu par WebKit : la liste entière, recherche et filtre par type dans
-//     la page, et la fiche de chaque élément dans la page même (grande image, animation d'un tag animé, prix, source, boutique
-//     d'accessoires du jour) : un seul élément natif de poids.
-//   - Origine (ticket 8.11, origines.ts) : un accessoire sans prix dit son origine exacte (passe de combat, contrat d'agent,
-//     événement) à la place du prix, et sa sortie dans la fiche si une source exacte la donne ; filtre « Obtention ».
-// Module pur : aucun import de « scripting », aucune lecture de fichier ; il tourne sous `node --test`.
 
-import { langue, traduire } from "./langue"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import { langue, langueDuCache, traduire } from "./langue"
 import { PRIX_NON_COMMUNIQUE } from "./catalogue-skins"
 import { normaliser } from "./souhaits"
 import { CSP_CATALOGUE, imageAdmise, metaCsp } from "./securite"
@@ -58,14 +58,18 @@ export const LIBELLES: Record<TypeAccessoire, { un: string; section: string }> =
   flex: { un: "Flex (signe de soutien)", section: "Flex" },
 }
 
-/** Les adresses publiques de valorant-api lues pour le cache, par type (fr-FR). */
-export const SOURCES_ACCESSOIRES: Record<TypeAccessoire, string> = {
-  buddy: "https://valorant-api.com/v1/buddies?language=fr-FR",
-  spray: "https://valorant-api.com/v1/sprays?language=fr-FR",
-  card: "https://valorant-api.com/v1/playercards?language=fr-FR",
-  title: "https://valorant-api.com/v1/playertitles?language=fr-FR",
-  flex: "https://valorant-api.com/v1/flex?language=fr-FR",
+/** Le chemin de la liste publique de valorant-api de chaque type. */
+const CHEMINS_ACCESSOIRES: Record<TypeAccessoire, string> = { buddy: "buddies", spray: "sprays", card: "playercards", title: "playertitles", flex: "flex" }
+
+
+export function sourcesAccessoires(langue: string): Record<TypeAccessoire, string> {
+  const r = {} as Record<TypeAccessoire, string>
+  for (const t of TYPES_ACCESSOIRES) r[t] = `https://valorant-api.com/v1/${CHEMINS_ACCESSOIRES[t]}?language=${langue}`
+  return r
 }
+
+/** Les adresses publiques de valorant-api lues pour le cache, par type, en fr-FR. */
+export const SOURCES_ACCESSOIRES: Record<TypeAccessoire, string> = sourcesAccessoires("fr-FR")
 
 /**
  * Un accessoire du catalogue : `id`, l'uuid que vend la boutique ; `type` ; `nom` (fr-FR, tel quel) ; `titre`, le nom sans le
@@ -82,16 +86,21 @@ const PREFIXES: Record<TypeAccessoire, RegExp> = {
   buddy: /^porte-bonheur\s+/i, spray: /^graffiti\s+/i, card: /^carte\s+/i, title: /^titre\s+/i, flex: /^flex\s+/i,
 }
 
+const SUFFIXES: Record<TypeAccessoire, RegExp> = {
+  buddy: /\s+buddy$/i, spray: /\s+spray$/i, card: /\s+card$/i, title: /\s+title$/i, flex: /\s+flex$/i,
+}
+
 // ─────────────────────────── lecture de valorant-api ───────────────────────────
 
 /** Un élément de chaque type, d'une entrée de valorant-api ; entrée abîmée, sans uuid ni nom : null. */
-function lireUn(type: TypeAccessoire, x: unknown): Accessoire | null {
+function lireUn(type: TypeAccessoire, x: unknown, anglais: boolean): Accessoire | null {
   const nom = chaine(propre(x, "displayName"))
   let id = uuid(propre(x, "uuid"))
   if (type === "buddy") id = uuid(propre(elements(propre(x, "levels"))[0], "uuid"))
   if (id === null || nom === null) return null
   if (type === "spray" && propre(x, "isNullSpray") === true) return null
-  const sansPrefixe = nom.replace(PREFIXES[type], "").trim()
+  // Le mot du type retiré du titre : devant en fr-FR (« Carte Duo fluo »), après en en-US (« Dayglo Duo Card »).
+  const sansPrefixe = nom.replace(anglais ? SUFFIXES[type] : PREFIXES[type], "").trim()
   const base = { id, type, nom, titre: sansPrefixe.length > 0 ? sansPrefixe : nom, icone: null, image: null, animation: null, texte: null }
   switch (type) {
     case "buddy": {
@@ -123,13 +132,14 @@ function lireUn(type: TypeAccessoire, x: unknown): Accessoire | null {
  * double passé (le premier gardé), tag nul (`isNullSpray`) passé ; rangés par type (ordre de TYPES_ACCESSOIRES) puis par titre.
  * Jamais d'erreur.
  */
-export function lireAccessoires(reponses: Partial<Record<TypeAccessoire, unknown>>): Accessoire[] {
+export function lireAccessoires(reponses: Partial<Record<TypeAccessoire, unknown>>, langue = "fr-FR"): Accessoire[] {
+  const anglais = langue === "en-US"
   const vus = new Set<string>()
   const out: Accessoire[] = []
   for (const type of TYPES_ACCESSOIRES) {
     const r = reponses[type]
     for (const x of elements(estObjet(r) ? propre(r, "data") : r)) {
-      const a = lireUn(type, x)
+      const a = lireUn(type, x, anglais)
       if (a === null || vus.has(a.id)) continue
       vus.add(a.id)
       out.push(a)
@@ -141,12 +151,15 @@ export function lireAccessoires(reponses: Partial<Record<TypeAccessoire, unknown
 
 // ─────────────────────────── accessoires.json ───────────────────────────
 
-/** accessoires.json : la version du jeu de la boutique qui l'a fait (ou null), quand, les éléments. */
-export type CacheAccessoires = { version: string | null; lueA: string; elements: Accessoire[] }
+
+
+
+
+export type CacheAccessoires = { version: string | null; lueA: string; langue: string; elements: Accessoire[] }
 
 /** Le contenu de accessoires.json. */
-export function contenuCache(version: string | null, lueA: string, liste: Accessoire[]): string {
-  return JSON.stringify({ version, lueA, elements: liste })
+export function contenuCache(version: string | null, lueA: string, liste: Accessoire[], langue = "fr-FR"): string {
+  return JSON.stringify({ version, lueA, langue, elements: liste })
 }
 
 const TYPES = new Set<string>(TYPES_ACCESSOIRES)
@@ -171,12 +184,16 @@ export function lireCache(contenu: string | null | undefined): CacheAccessoires 
       icone: image(propre(x, "icone")), image: image(propre(x, "image")), animation: image(propre(x, "animation")), texte: chaine(propre(x, "texte")),
     })
   }
-  return { version, lueA, elements: out }
+  return { version, lueA, langue: langueDuCache(propre(brut, "langue")), elements: out }
 }
 
-/** Le cache est-il à refaire : absent, vide, ou d'une autre version que celle de la boutique lue (connue). */
-export function cacheARefaire(cache: CacheAccessoires | null, version: unknown): boolean {
+
+
+
+
+export function cacheARefaire(cache: CacheAccessoires | null, version: unknown, langue?: string): boolean {
   if (cache === null || cache.elements.length === 0) return true
+  if (langue !== undefined && cache.langue !== langue) return true
   return typeof version === "string" && version.length > 0 && cache.version !== version
 }
 

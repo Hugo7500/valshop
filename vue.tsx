@@ -4,7 +4,7 @@ import {
   ImageRenderer, type VirtualNode,
 } from "scripting"
 import {
-  LIMITE_RECHERCHE, basculer, catalogueAncien, chercher, contient, lireListe, type Souhait,
+  LIMITE_RECHERCHE, basculer, catalogueAncien, chercher, contient, lireListe, nomDuSouhait, type Souhait,
 } from "./souhaits"
 import { CatalogueSkins } from "./catalogue-web"
 import { CatalogueAccessoires } from "./accessoires-web"
@@ -17,8 +17,8 @@ import { chargerDonnees } from "./widgets-donnees"
 import { FicheAccessoire } from "./fiche-accessoire"
 import { FicheBundle } from "./fiche-bundle"
 import { FicheSkin, type OffreAffichee } from "./fiche-skin"
-import { jusquAu, libelleType, type ObjetBundle } from "./fiches"
-import { boutiqueExpiree, type IssueLecture } from "./garde-fou"
+import { jusquAu, libelleType, separerNom, type ObjetBundle } from "./fiches"
+import { boutiqueARelire, type IssueLecture } from "./garde-fou"
 import { delaiEnClair } from "./historique"
 import { CATALOG, SHOP_FILE, SOLDE_FILE, WISHLIST_FILE, lireBoutique, loadCookies, note } from "./valshop"
 import { planifierIle } from "./widgets-ile-app"
@@ -26,7 +26,7 @@ import { iconeLisible } from "./securite"
 import { DEJA_A_TOI, VOIX_DEJA_A_TOI, accessoirePossede, skinPossede } from "./possessions"
 import { possessionsLues } from "./possessions-ecran"
 import { MaCollection } from "./collection"
-import { locale } from "./langue"
+import { langueDesNoms, locale } from "./langue"
 import { ImagePartage } from "./boutique-cartes"
 import { ligneSolde, lireSolde, type IssueSolde, type SoldeGarde } from "./solde"
 
@@ -201,14 +201,17 @@ function chargerCatalogue(): unknown {
   }
 }
 
-/**
- * « Vandal (Glitchpop) » → skin « Glitchpop », arme « VANDAL » ; sans parenthèses, tout est le skin.
- * Blancs autour retirés d'abord : valorant-api en laisse parfois un à la fin (« Vandal (XERØFANG) »).
- */
+
+let nomsAnglais: boolean | null = null
+
+
+
+
+
+
 function split(n: string): { skin: string; weapon: string } {
-  const t = n.trim()
-  const m = t.match(/^(.*?)\s*\((.*)\)$/)
-  return m ? { skin: m[2], weapon: m[1].toUpperCase() } : { skin: t, weapon: "" }
+  if (nomsAnglais === null) nomsAnglais = langueDesNoms() === "en-US"
+  return separerNom(n, nomsAnglais)
 }
 
 
@@ -644,6 +647,13 @@ function EditeurSouhaits({ initiale, onChange }: { initiale: Souhait[]; onChange
   }
   const trouves = tenue.current.trouves
 
+
+  const langueNoms = langueDesNoms()
+  const affichee = (e: Souhait): Souhait => {
+    const nom = nomDuSouhait(e, catalogue, langueNoms)
+    return nom === e.name ? e : { ...e, name: nom }
+  }
+
   const appui = useStable((entree: Souhait) => {
     const nouvelle = basculer(liste, entree)
     try {
@@ -702,7 +712,7 @@ function EditeurSouhaits({ initiale, onChange }: { initiale: Souhait[]; onChange
       <Section title="Ma liste">
         {liste.length > 0 ? (
           liste.map((e) => (
-            <LigneSouhait key={`${e.kind}:${e.id}`} entree={e} dedans basculer={appui} />
+            <LigneSouhait key={`${e.kind}:${e.id}`} entree={affichee(e)} dedans basculer={appui} />
           ))
         ) : (
           <Text foregroundStyle="secondaryLabel">Aucun souhait pour l'instant</Text>
@@ -913,7 +923,7 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
   // par ↻) ; sinon une ligne au journal, puis le chemin du bouton.
   const lireAuto = useStable(async (apresAttente: boolean) => {
     if (occupe.current) return
-    if (apresAttente && !boutiqueExpiree(Date.now(), charger() ?? shop)) return
+    if (apresAttente && !boutiqueARelire(Date.now(), charger() ?? shop, langueDesNoms)) return
     try { note(LIGNE_LECTURE_AUTO).catch(() => {}) } catch { /* journal indisponible : la lecture part quand même */ }
     await lire(false)
   })
@@ -924,7 +934,8 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
   useEffect(() => {
     if (auto === undefined || auto.boutique) return
     auto.boutique = true
-    if (!boutiqueExpiree(Date.now(), ouverte) || !sessionGardee()) return
+
+    if (!boutiqueARelire(Date.now(), ouverte, langueDesNoms) || !sessionGardee()) return
     let montee = true
     const attendue = auto.collecte
     const fin = (attendue ?? Promise.resolve()).then(() => (montee ? lireAuto(attendue !== null) : undefined)).then(() => {}, () => {})

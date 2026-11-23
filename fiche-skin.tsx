@@ -6,6 +6,7 @@ import { COULEURS } from "./design"
 import { BoutonSouhait, EnTeteFiche } from "./fiche-cartes"
 import { libelleVariante, lireFicheSkin, separerNom, type NiveauDeSkin } from "./fiches"
 import { catalogueAReconstruire, type Variante } from "./souhaits"
+import { langueDesNoms } from "./langue"
 import { CATALOG } from "./valshop"
 import { iconeLisible, imageAdmise, videoAdmise } from "./securite"
 import { apparitions, niveauxDuSkin, phraseApparitions, skinPossede } from "./possessions"
@@ -532,7 +533,8 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
   const rang = choix.id === id && choix.ouverture === ouverture && choix.rang < variantes.length ? choix.rang : 0
   const variante = variantes.length > 0 ? variantes[rang] : null
   const adresse = variante && variante.fullRender && !echecs.includes(variante.fullRender) ? variante.fullRender : null
-  const noms = separerNom(fiche ? fiche.name : offre?.name ?? id)
+
+  const noms = separerNom(fiche ? fiche.name : offre?.name ?? id, langueDesNoms() === "en-US")
   const arme = noms.weapon || (fiche?.weapon ?? "").toUpperCase()
   // Sans fiche, sur un catalogue à reconstruire : ses variantes viendront à la prochaine lecture de la boutique.
   const attente = !fiche && catalogueAReconstruire(catalogue)

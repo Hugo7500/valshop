@@ -28,9 +28,38 @@ export function langue(): Langue {
 export function locale(): "fr-FR" | "en-US" {
   return courante === "en" ? "en-US" : "fr-FR"
 }
-/** La langue des noms de valorant-api.com (skins, armes, cartes, agents). */
-export function langueApi(): "fr-FR" | "en-US" {
-  return courante === "en" ? "en-US" : "fr-FR"
+/**
+ * La langue de l'appareil : le réglage gardé (preferences.json), sinon celle d'iOS (`Device.systemLanguageCode`) ; illisible :
+ * le français. Lue à chaque appel, la même dans l'app, le widget, Raccourcis et l'île (`langue()`, elle, n'est fixée que là où
+ * `installerTraduction` a tourné : en arrière-plan, elle vaut « fr »).
+ */
+export function langueAppareil(): Langue {
+  try {
+    return langueDe(preferencesGardees().langue, Device.systemLanguageCode)
+  } catch {
+    return "fr"
+  }
+}
+
+/** La langue d'un nom de valorant-api.com (`?language=`), et celle que porte chaque cache qui en est tiré. */
+export type LangueNoms = "fr-FR" | "en-US"
+
+
+
+
+
+
+
+export function langueDesNoms(): LangueNoms {
+  return langueAppareil() === "en" ? "en-US" : "fr-FR"
+}
+
+/** Le nom que cite anglais.ts (généré par fusion.ts, hors du dépôt) : langueDesNoms elle-même. */
+export const langueApi = langueDesNoms
+
+
+export function langueDuCache(champ: unknown): string {
+  return typeof champ === "string" && champ !== "" ? champ : "fr-FR"
 }
 
 /** Un gabarit compilé : l'expression du texte français, l'ordre de ses valeurs, le texte anglais, sa part fixe (pour choisir). */
@@ -191,11 +220,11 @@ function enfant(e: unknown): unknown {
  * Un texte hors d'une vue (le corps d'une notification), dans la langue de l'appareil : la langue lue (réglage, iOS) même si
  * rien n'a été installé (lecture en arrière-plan), le dictionnaire chargé au besoin. En français, ou en cas d'échec : tel quel.
  */
-let langueAppareil: Langue | null = null
+let langueLue: Langue | null = null
 export async function traduireHorsVue(texte: string): Promise<string> {
   try {
-    if (langueAppareil === null) langueAppareil = langueDe(preferencesGardees().langue, Device.systemLanguageCode)
-    if (langueAppareil !== "en") return texte
+    if (langueLue === null) langueLue = langueAppareil()
+    if (langueLue !== "en") return texte
     if (dico === null) {
       const m: Source = await import("./anglais")
       dico = compilerDictionnaire(m.MOTS, m.MOTIFS, m.GABARITS)

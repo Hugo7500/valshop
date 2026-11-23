@@ -23,6 +23,8 @@ export type Decision = "lecture" | "cache"
 export type BoutiqueLue = {
   updatedAt?: unknown
   daily?: { resetAt?: unknown } | null
+
+  langue?: unknown
 }
 
 /** Horodatage ISO 8601 → millisecondes depuis l'epoch ; null s'il est absent ou invalide. */
@@ -41,6 +43,31 @@ function instant(iso: unknown): number | null {
 export function deciderLecture(now: number, shop: BoutiqueLue | null | undefined): Decision {
   const resetAt = instant(shop?.daily?.resetAt)
   return resetAt !== null && now < resetAt ? "cache" : "lecture"
+}
+
+
+
+
+
+
+
+export function deciderLectureLangue(now: number, shop: BoutiqueLue | null | undefined, voulue: string): Decision {
+  if (deciderLecture(now, shop) === "lecture") return "lecture"
+  const gardee = typeof shop?.langue === "string" && shop.langue !== "" ? shop.langue : "fr-FR"
+  return gardee === voulue ? "cache" : "lecture"
+}
+
+
+
+
+
+
+
+export function boutiqueARelire(now: number, shop: BoutiqueLue | null | undefined, voulue: () => string): boolean {
+  if (boutiqueExpiree(now, shop)) return true
+  if (instant(shop?.daily?.resetAt) === null) return false
+  const gardee = typeof shop?.langue === "string" && shop.langue !== "" ? shop.langue : "fr-FR"
+  return gardee !== voulue()
 }
 
 /**

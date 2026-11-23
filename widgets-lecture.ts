@@ -27,6 +27,8 @@ export type Sources = {
   offres?: string | null; liste?: string | null; stats?: string | null; compte?: string | null
   /** La période des stats de ce widget (widgets-reglage.ts) ; sans elle, 30 jours. */
   periode?: string
+
+  anglais?: boolean
 }
 
 /** Au-delà de cet âge, un appui sur ↻ n'est plus dit par le widget. */
@@ -84,7 +86,7 @@ function skin(x: unknown, s: Sources): SkinVu | null {
   const o = objet(x)
   const nom = texte(o?.name)
   if (!o || nom === null) return null
-  const { skin: n, weapon } = separerNom(nom)
+  const { skin: n, weapon } = separerNom(nom, s.anglais === true)
   return { nom: n, arme: weapon, prix: prix(o.cost), icone: icone(o.icon, s), couleur: /^#[0-9a-fA-F]{6}$/.test(String(o.color)) ? String(o.color) : null }
 }
 

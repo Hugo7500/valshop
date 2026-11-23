@@ -1,19 +1,19 @@
-// Ressources des stats (entrée 9) : ce que les écrans des stats dessinent hors réseau, rangé dans
-// catalog.json à côté de `agents` par Mettre à jour, une fois par version du jeu : le plan de chaque
-// carte (`cartes` : image, coefficients d'affichage et callouts de `/v1/maps`), le nom, l'emblème et
-// la couleur de chaque palier de rang (`paliers` : dernière table de
-// `/v1/competitivetiers?language=fr-FR`), la catégorie et le prix de chaque arme (`armes` :
-// `/v1/weapons`), et la version du jeu sous laquelle chacune a été rangée (`ressources`). Ici : les
-// réponses de valorant-api mises en sections, avec les images qu'elles citent ; les sections à
-// relire ; le nom de l'image d'une carte, tiré de ses coefficients (empreinteCoefficients) ; la
-// lecture tolérante des trois sections, pour les écrans (lireRessources). Les images se rangent sous
-// `icons/`, à leur taille d'origine, et chaque section les cite par un chemin relatif au dossier du
-// groupe d'apps (`icons/<uuid>-<empreinte>.png`), ce dossier pouvant changer à une restauration.
-//
-// Module pur : aucun import de « scripting », aucune lecture de fichier, ni réseau, ni horloge,
-// seulement des types effaçables, pour tourner tel quel sous `node --test` (spike-s0/tests/). Les
-// requêtes, les images et l'écriture de catalog.json restent le travail de collecte.ts et de
-// stockage.ts.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ─────────────────────────── formes ───────────────────────────
 
@@ -216,7 +216,7 @@ export function cartesDeValorantApi(reponse: unknown): SectionLue<SectionCartes>
 }
 
 /**
- * La section `paliers` tirée de la dernière table de `/v1/competitivetiers?language=fr-FR` (`{ data: [{ uuid, tiers:
+ * La section `paliers` tirée de la dernière table de `/v1/competitivetiers?language=<langue des noms>` (`{ data: [{ uuid, tiers:
  * [{ tier, tierName, color, largeIcon, smallIcon }] }] }`, la table de l'épisode en cours, celle des `tier.id` de
  * HenrikDev) : chaque palier par son numéro, son nom fr-FR, sa couleur, son emblème cité sous
  * `icons/<uuid de table>-<palier>.png` s'il a une adresse (`largeIcon`, sinon `smallIcon`). Un palier sans numéro
@@ -266,7 +266,7 @@ export function armesDeValorantApi(reponse: unknown): SectionLue<SectionArmes> |
 const TOUCHE_D_EMPLACEMENT: Readonly<Record<string, keyof NomsCapacites>> = { Grenade: "c", Ability1: "q", Ability2: "e", Ultimate: "x" }
 
 /**
- * Ticket 4.52 : la section `capacites` tirée de `/v1/agents?isPlayableCharacter=true&language=fr-FR` (`{ data: [{ uuid,
+ * Ticket 4.52 : la section `capacites` tirée de `/v1/agents?isPlayableCharacter=true&language=<langue des noms>` (`{ data: [{ uuid,
  * isPlayableCharacter, abilities: [{ slot, displayName }] }] }`) : chaque agent jouable, le nom de chaque capacité par sa touche
  * (TOUCHE_D_EMPLACEMENT ; `Passive` et tout autre emplacement passés ; un emplacement en double : null, on ne sait lequel).
  * Un agent sans UUID, non jouable ou sans aucun nom est passé ; aucune image. null si la réponse n'a pas cette forme ou ne donne
@@ -344,16 +344,35 @@ export function versionDuJeu(boutique: unknown, catalogue: unknown): string | nu
   return null
 }
 
-/**
- * Les sections à relire sur valorant-api, d'après catalog.json (son contenu déjà lu, un objet ; absent : `{}`) : une
- * section absente ou illisible (pas un objet) ; et, la version du jeu connue, une section rangée sous une autre version
- * (autre version, null, ou `ressources` illisible). Version inconnue : les sections absentes ou illisibles seulement.
- * Vide : tout est à jour, aucune requête.
- */
-export function sectionsARelire(catalogue: unknown, version: string | null): NomRessource[] {
+
+
+
+
+export const SECTIONS_NOMMEES: readonly NomRessource[] = ["paliers", "capacites"]
+
+
+
+
+
+export function langueDeSection(catalogue: unknown, nom: NomRessource): string | null {
+  if (!SECTIONS_NOMMEES.includes(nom)) return null
+  const c = estObjet(catalogue) ? catalogue : {}
+  const l = estObjet(c.languesRessources) ? c.languesRessources[nom] : undefined
+  return typeof l === "string" && l !== "" ? l : "fr-FR"
+}
+
+
+
+
+
+
+
+
+export function sectionsARelire(catalogue: unknown, version: string | null, langue?: string): NomRessource[] {
   const c = estObjet(catalogue) ? catalogue : {}
   const versions = estObjet(c.ressources) ? c.ressources : {}
-  return SECTIONS_RESSOURCES.filter((nom) => !estObjet(c[nom]) || (version !== null && versions[nom] !== version))
+  return SECTIONS_RESSOURCES.filter((nom) => !estObjet(c[nom]) || (version !== null && versions[nom] !== version)
+    || (langue !== undefined && SECTIONS_NOMMEES.includes(nom) && langueDeSection(c, nom) !== langue))
 }
 
 // ─────────────────────────── lecture pour les écrans ───────────────────────────

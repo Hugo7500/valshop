@@ -1,12 +1,12 @@
 import { Widget, Notification, fetch, type Cookie, type RequestInit } from "scripting"
 import {
-  cookiesRiot, deciderLecture, deciderPrix, lireVerrou, maintenanceProbable, nouveauVerrou, nouvelEtat, resumeErreurRiot, verrouActif, verrouDe,
+  cookiesRiot, deciderLectureLangue, deciderPrix, lireVerrou, maintenanceProbable, nouveauVerrou, nouvelEtat, resumeErreurRiot, verrouActif, verrouDe,
   type BoutiqueLue, type IssueLecture, type OrigineVerrou,
 } from "./garde-fou"
 import { comparer, type Alerte } from "./alertes"
 import { contenuOffres } from "./widgets-lecture"
-import { traduireHorsVue } from "./langue"
-import { catalogueAReconstruire, construireCatalogue, lireListe, type Arme, type Skin, type Souhait } from "./souhaits"
+import { langueDesNoms, traduireHorsVue } from "./langue"
+import { catalogueAReconstruire, construireCatalogue, langueCatalogue, lireListe, type Arme, type Skin, type Souhait } from "./souhaits"
 import {
   decrireAccessoire, decrireObjet, entreeValide, estNiveau, lireObjetsBundle, type EntreeAccessoire,
 } from "./fiches"
@@ -671,6 +671,13 @@ type Catalogue = {
   weapons: Record<string, Arme>
   bundles: Record<string, EntreeBundle>
   accessories: Record<string, EntreeAccessoire>
+
+  langue: string
+
+
+
+
+  anciens?: { bundles: Record<string, EntreeBundle>; accessories: Record<string, EntreeAccessoire> }
 }
 
 /**
@@ -710,8 +717,11 @@ function section<T>(c: any, nom: "levels" | "skins" | "weapons" | "bundles" | "a
   return estObjet(s) ? (s as Record<string, T>) : {}
 }
 
-/** Sections de catalog.json que `catalog()` refait ou tient elle-même (ticket 8.4 : `tiers` et `themes`, du Catalogue). */
-const SECTIONS_BOUTIQUE = new Set(["version", "levels", "skins", "weapons", "tiers", "themes", "bundles", "accessories"])
+
+
+
+
+const SECTIONS_BOUTIQUE = new Set(["version", "langue", "levels", "skins", "weapons", "tiers", "themes", "bundles", "accessories"])
 
 /** Toutes les autres sections d'un catalogue lu sur le disque (rôles des agents, ressources des stats, section inconnue), telles quelles. */
 function autresSections(c: unknown): Record<string, unknown> {
@@ -736,40 +746,47 @@ function autresSections(c: unknown): Record<string, unknown> {
  * seulement) ; sans thèmes, comme sans couleurs, rien n'est écrit.
  */
 async function catalog(version: string, j: Jeton): Promise<Catalogue> {
+
+
+  const voulue = langueDesNoms()
   let ancien: any = null
   try {
     if (FileManager.existsSync(CATALOG)) {
       ancien = JSON.parse(await FileManager.readAsString(CATALOG))
-      if (ancien?.version === version && !catalogueAReconstruire(ancien)) {
+      if (ancien?.version === version && !catalogueAReconstruire(ancien, voulue)) {
         return {
           levels: ancien.levels, skins: ancien.skins, weapons: ancien.weapons,
-          bundles: section(ancien, "bundles"), accessories: section(ancien, "accessories"),
+          bundles: section(ancien, "bundles"), accessories: section(ancien, "accessories"), langue: voulue,
         }
       }
     }
   } catch { /* on reconstruit */ }
 
-  const bundles = section<EntreeBundle>(ancien, "bundles")
-  const accessories = section<EntreeAccessoire>(ancien, "accessories")
+  // Même langue : bundles et accessoires gardés, comme avant. Autre langue : sections neuves, remplies à la demande dans la
+  // nouvelle ; les anciennes ne servent qu'à montrer un objet que la nouvelle n'a pas pu décrire (Catalogue.anciens).
+  const memeLangue = langueCatalogue(ancien) === voulue
+  const bundles: Record<string, EntreeBundle> = memeLangue ? section<EntreeBundle>(ancien, "bundles") : {}
+  const accessories: Record<string, EntreeAccessoire> = memeLangue ? section<EntreeAccessoire>(ancien, "accessories") : {}
+  const anciensObjets = memeLangue ? undefined : { bundles: section<EntreeBundle>(ancien, "bundles"), accessories: section<EntreeAccessoire>(ancien, "accessories") }
 
   // Paliers de rareté (couleurs ; ticket 8.4 : libellés fr-FR des éditions) : réponse en erreur, sans `data` ou vide = indisponibles.
   let paliers: unknown[] = []
   try {
-    const r = await requete(j, "https://valorant-api.com/v1/contenttiers?language=fr-FR", { timeout: 25 })
+    const r = await requete(j, `https://valorant-api.com/v1/contenttiers?language=${voulue}`, { timeout: 25 })
     const data = r.ok ? (await jsonBorne(r, BORNE_JSON))?.data : null
     if (Array.isArray(data)) paliers = data
   } catch { /* indisponibles, voir plus bas */ }
   // Thèmes (ticket 8.4 : collections du Catalogue) : même règle.
   let themes: unknown[] = []
   try {
-    const r = await requete(j, "https://valorant-api.com/v1/themes?language=fr-FR", { timeout: 25 })
+    const r = await requete(j, `https://valorant-api.com/v1/themes?language=${voulue}`, { timeout: 25 })
     const data = r.ok ? (await jsonBorne(r, BORNE_JSON))?.data : null
     if (Array.isArray(data)) themes = data
   } catch { /* indisponibles, voir plus bas */ }
 
   try {
     // Une requête pour tout : armes → skins → niveaux, mis à plat par le module pur.
-    const r = await requete(j, "https://valorant-api.com/v1/weapons?language=fr-FR", { timeout: 40 })
+    const r = await requete(j, `https://valorant-api.com/v1/weapons?language=${voulue}`, { timeout: 40 })
     if (!r.ok) throw new Error("HTTP " + r.status)
     const neuf = construireCatalogue((await jsonBorne(r, BORNE_JSON))?.data, paliers, themes)
     if (Object.keys(neuf.levels).length === 0) throw new Error("aucun niveau de skin dans la réponse")
@@ -779,32 +796,33 @@ async function catalog(version: string, j: Jeton): Promise<Catalogue> {
       const anciens = section<Entry>(ancien, "levels")
       for (const [id, n] of Object.entries(neuf.levels)) n.color = anciens[id]?.color ?? null
       await note("couleurs indisponibles : catalogue non écrit, nouvel essai à la prochaine lecture")
-      return { ...neuf, bundles, accessories }
+      return { ...neuf, bundles, accessories, langue: voulue, anciens: anciensObjets }
     }
     if (themes.length === 0) {
       // Sans collections, rien d'écrit non plus : le Catalogue les perdrait jusqu'au prochain patch.
       await note("collections indisponibles : catalogue non écrit, nouvel essai à la prochaine lecture")
-      return { ...neuf, bundles, accessories }
+      return { ...neuf, bundles, accessories, langue: voulue, anciens: anciensObjets }
     }
     try {
       if (!(await encore(j))) throw new VerrouPerdu()
-      await FileManager.writeAsString(CATALOG, JSON.stringify({ ...autresSections(ancien), version, ...neuf, bundles, accessories }))
+      await FileManager.writeAsString(CATALOG, JSON.stringify({ ...autresSections(ancien), version, langue: voulue, ...neuf, bundles, accessories }))
       await note(`Catalogue reconstruit : ${Object.keys(neuf.levels).length} niveaux, `
         + `${Object.keys(neuf.skins).length} skins, ${Object.keys(neuf.weapons).length} armes.`)
     } catch (e) {
       if (e instanceof VerrouPerdu) throw e
       await note("Catalogue reconstruit mais non écrit : " + masquerErreur(e))
     }
-    return { ...neuf, bundles, accessories }
+    return { ...neuf, bundles, accessories, langue: voulue, anciens: anciensObjets }
   } catch (e) {
     // Verrou repris : la lecture s'arrête là (lire), sans rien écrire.
     if (e instanceof VerrouPerdu) throw e
-    // Jamais un catalogue vide : le fichier reste tel quel, la lecture suivante réessaie.
+
+
+    const garde = Object.keys(section(ancien, "levels")).length > 0
     const repli: Catalogue = {
       levels: section(ancien, "levels"), skins: section(ancien, "skins"), weapons: section(ancien, "weapons"),
-      bundles, accessories,
+      bundles: section(ancien, "bundles"), accessories: section(ancien, "accessories"), langue: garde ? langueCatalogue(ancien) : voulue,
     }
-    const garde = Object.keys(repli.levels).length > 0
     await note(`Catalogue non reconstruit (${masquerErreur(e)}) : ${garde ? "ancien catalogue gardé" : "identifiants bruts"}, `
       + "nouvel essai à la prochaine lecture.")
     return repli
@@ -823,6 +841,14 @@ async function conserverObjets(cat: Catalogue, j: Jeton) {
       if (FileManager.existsSync(CATALOG)) c = JSON.parse(await FileManager.readAsString(CATALOG))
     } catch { /* illisible : on repart des deux sections seules, les niveaux seront reconstruits */ }
     if (!estObjet(c)) c = {}
+
+
+
+    if (estObjet(c.levels) && langueCatalogue(c) !== cat.langue) {
+      await note("Catalogue : bundles et accessoires non conservés (catalogue gardé dans une autre langue).")
+      return
+    }
+    if (!estObjet(c.levels)) c.langue = cat.langue
     c.bundles = cat.bundles
     c.accessories = cat.accessories
     if (!(await encore(j))) return
@@ -845,16 +871,17 @@ const SOURCES_ACCESSOIRES: { chemin: string; kind: string }[] = [
 /** Vrai dès qu'une requête au catalogue public a échoué (réseau, délai) : on n'insiste plus pour cette lecture. */
 let cataloguePublicMuet = false
 
-/**
- * Un objet du catalogue public (`/v1/{chemin}`, libellés fr-FR) ; null s'il n'y est
- * pas (404), si la réponse est inattendue ou si le catalogue ne répond pas. Rien ne
- * remonte : la mise à jour continue avec l'identifiant brut.
- */
-async function objetPublic(chemin: string, j: Jeton): Promise<Record<string, any> | null> {
+
+
+
+
+
+
+async function objetPublic(chemin: string, j: Jeton, langue: string): Promise<Record<string, any> | null> {
   // Ticket 7.8 (F3) : l'id d'un objet de la boutique, mis dans l'adresse, doit être un UUID (rien d'autre n'y entre).
   if (cataloguePublicMuet || !estUuid(chemin.slice(chemin.lastIndexOf("/") + 1))) return null
   try {
-    const r = await requete(j, `https://valorant-api.com/v1/${chemin}?language=fr-FR`, { timeout: 15 })
+    const r = await requete(j, `https://valorant-api.com/v1/${chemin}?language=${langue}`, { timeout: 15 })
     if (!r.ok) return null
     const d = (await jsonBorne(r, BORNE_JSON))?.data
     return estObjet(d) ? d : null
@@ -1390,13 +1417,15 @@ async function buildShopJson(raw: any, region: string, version: string, j: Jeton
   async function decrireBundle(id: string) {
     let e: EntreeBundle | undefined = cat.bundles[id]
     if (!e) {
-      const d = await objetPublic(`bundles/${id}`, j)
+      const d = await objetPublic(`bundles/${id}`, j, cat.langue)
       if (d) {
         e = { name: texte(d.displayName) ?? id, icon: texte(d.displayIcon) }
         cat.bundles[id] = e
         ajoutes++
       }
     }
+
+    if (!e && cat.anciens && Object.prototype.hasOwnProperty.call(cat.anciens.bundles, id)) e = cat.anciens.bundles[id]
     return { name: e?.name ?? id, icon: await cacheIcon(id, e?.icon ?? null, j) }
   }
 
@@ -1413,9 +1442,14 @@ async function buildShopJson(raw: any, region: string, version: string, j: Jeton
   async function entreeAccessoire(id: string): Promise<unknown> {
     const connue: unknown = Object.prototype.hasOwnProperty.call(cat.accessories, id) ? cat.accessories[id] : undefined
     if (entreeValide(connue)) return connue
-    const sienne = estObjet(connue) ? SOURCES_ACCESSOIRES.find((s) => s.kind === connue.kind) : undefined
+
+
+    const ancienne: unknown = connue === undefined && cat.anciens && Object.prototype.hasOwnProperty.call(cat.anciens.accessories, id)
+      ? cat.anciens.accessories[id] : undefined
+    const guide = connue ?? ancienne
+    const sienne = estObjet(guide) ? SOURCES_ACCESSOIRES.find((s) => s.kind === guide.kind) : undefined
     for (const s of sienne ? [sienne] : SOURCES_ACCESSOIRES) {
-      const d = await objetPublic(`${s.chemin}/${id}`, j)
+      const d = await objetPublic(`${s.chemin}/${id}`, j, cat.langue)
       if (!d) continue
       const e: EntreeAccessoire = decrireAccessoire(s.kind, id, d)
       cat.accessories[id] = e
@@ -1423,7 +1457,7 @@ async function buildShopJson(raw: any, region: string, version: string, j: Jeton
       else redecrits++
       return e
     }
-    return connue
+    return guide
   }
 
   const panel = raw.SkinsPanelLayout ?? {}
@@ -1548,6 +1582,8 @@ async function buildShopJson(raw: any, region: string, version: string, j: Jeton
   const data = {
     updatedAt: new Date().toISOString(),
     region, version,
+
+    langue: langueDesNoms(),
     daily: { items, remainingSeconds: dailySecs, resetAt: iso(dailySecs) },
     nightMarket: nm
       ? { active: true, items: nmItems, remainingSeconds: nmSecs, endsAt: iso(nmSecs) }
@@ -1694,7 +1730,8 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
     } catch (e) {
       await note("garde-fou : shop.json illisible (" + masquerErreur(e) + ").")
     }
-    if (deciderLecture(now, cache) === "cache") {
+
+    if (deciderLectureLangue(now, cache, langueDesNoms()) === "cache") {
       await note(`garde-fou : cache (lue à ${heure(cache?.updatedAt)}, reset à ${heure(cache?.daily?.resetAt)})`)
       const resetAt = cache?.daily?.resetAt
       // Entrée 17 de epic-boutique-visuels : sur un appui, le seul solde est relu sous cette boutique (il change plus souvent

@@ -6,6 +6,7 @@
 import { deciderLecture, sessionExpiree } from "./garde-fou"
 import { ETAT_FILE, SHOP_FILE, SOLDE_FILE, WISHLIST_FILE } from "./valshop"
 import { contenuAppui, lireDonnees } from "./widgets-lecture"
+import { langueDesNoms } from "./langue"
 import type { Appui, Donnees } from "./widgets-types"
 
 /** Le dernier appui sur ↻ depuis un widget (contrat-donnees.md) : état et heure, pour que le widget réponde à l'appui. */
@@ -49,6 +50,7 @@ export function chargerDonnees(periode?: string): Donnees | null {
     stats: texte(STATS_WIDGET_FILE),
     compte: texte(COMPTE_FILE),
     periode,
+    anglais: langueDesNoms() === "en-US",
     maintenant: Date.now(),
     groupe: FileManager.appGroupDocumentsDirectory,
     existe: (chemin) => {

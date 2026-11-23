@@ -7,6 +7,7 @@ import { EnTeteFiche } from "./fiche-cartes"
 import { FicheAccessoire } from "./fiche-accessoire"
 import { FicheSkin } from "./fiche-skin"
 import { jusquAu, libelleType, objetsDuBundle, separerNom, type ObjetAffiche } from "./fiches"
+import { langueDesNoms } from "./langue"
 import { CATALOG } from "./valshop"
 import { iconeLisible, imageAdmise } from "./securite"
 
@@ -71,7 +72,7 @@ function GrandeImage({ icon }: { icon: string | null }) {
 
 function libelles(o: ObjetAffiche): { titre: string; secondaire: string; voix: string } {
   if (o.kind === "skin") {
-    const { skin, weapon } = separerNom(o.name)
+    const { skin, weapon } = separerNom(o.name, langueDesNoms() === "en-US")
     return { titre: skin, secondaire: weapon ? `Skin · ${weapon}` : "Skin", voix: [skin, "Skin", weapon].filter((t) => t !== "").join(", ") }
   }
   const type = libelleType(o.kind)

@@ -13,7 +13,7 @@
 
 
 
-import { traduire } from "./langue"
+import { langueDuCache, traduire } from "./langue"
 import { dateEnClair } from "./prix-retenus"
 
 function estObjet(x: unknown): x is Record<string, unknown> {
@@ -63,8 +63,10 @@ export type SourceOrigine = { g: GenreOrigine; l: string; d: string | null; k: D
 
 
 
+
+
 export type TableOrigines = {
-  version: string | null; lueA: string; sources: SourceOrigine[]; objets: Record<string, [number, string] | [number, string, 1]>
+  version: string | null; lueA: string; langue: string; sources: SourceOrigine[]; objets: Record<string, [number, string] | [number, string, 1]>
 }
 
 /** Les récompenses gardées : celles qui sont un objet du Catalogue (skin, porte-bonheur, carte, tag, titre, flex). */
@@ -104,7 +106,7 @@ function donnees(r: unknown): unknown[] {
  * contrat garde le premier et prend la marque « et autres » ; par le même contrat, le premier rang seul. Entrée abîmée passée,
  * jamais d'erreur.
  */
-export function construireOrigines(r: ReponsesOrigines, version: string | null, lueA: string): TableOrigines {
+export function construireOrigines(r: ReponsesOrigines, version: string | null, lueA: string, langue = "fr-FR"): TableOrigines {
   const saisons = new Map<string, { nom: string | null; parent: string | null; debut: string | null }>()
   for (const s of donnees(r.seasons)) {
     const id = uuid(propre(s, "uuid"))
@@ -170,7 +172,7 @@ export function construireOrigines(r: ReponsesOrigines, version: string | null, 
     }
     if (utilisee) sources.push(source)
   }
-  return { version, lueA, sources, objets }
+  return { version, lueA, langue, sources, objets }
 }
 
 /** Le contenu de origines.json. */
@@ -204,12 +206,16 @@ export function lireOrigines(contenu: string | null | undefined): TableOrigines 
     if (d === null) continue
     objets[id] = autres === 1 ? [rang, d, 1] : [rang, d]
   }
-  return { version: chaine(propre(brut, "version")), lueA, sources, objets }
+  return { version: chaine(propre(brut, "version")), lueA, langue: langueDuCache(propre(brut, "langue")), sources, objets }
 }
 
-/** La table est-elle à refaire : absente, vide, ou d'une autre version que celle de la boutique lue (connue). */
-export function originesARefaire(t: TableOrigines | null, version: unknown): boolean {
+
+
+
+
+export function originesARefaire(t: TableOrigines | null, version: unknown, langue?: string): boolean {
   if (t === null || Object.keys(t.objets).length === 0) return true
+  if (langue !== undefined && t.langue !== langue) return true
   return typeof version === "string" && version.length > 0 && t.version !== version
 }
 

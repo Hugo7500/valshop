@@ -19,7 +19,7 @@
 
 import { langue, traduire } from "./langue"
 import { separerNom } from "./fiches"
-import { catalogueAncien, normaliser } from "./souhaits"
+import { catalogueAncien, langueCatalogue, normaliser } from "./souhaits"
 import { CSP_CATALOGUE, imageAdmise as imageDistanteAdmise, metaCsp } from "./securite"
 import { complementDe, dateEnClair, prixReference, prixRetenu, type PrixVus, type Reference } from "./prix-retenus"
 import { BASE, THEME_STANDARD, choixObtention, codesObtention, origineDe, type Provenance, type TableOrigines } from "./origines"
@@ -501,9 +501,15 @@ export function cleCollection(nom: string): string {
   return normaliser(nom.replace(/\s+/g, " ").trim())
 }
 
-/** L'arme de corps à corps : rangée en dernier, comme dans l'arsenal du jeu. */
-function estMelee(nom: string): boolean {
-  return normaliser(nom) === "melee"
+/** L'arme de corps à corps de valorant-api (« Mêlée » en fr-FR, « Melee » en en-US). */
+export const ARME_MELEE = "2f59173c-4bed-b6c3-2191-dea9b58be9c7"
+
+
+
+
+
+function estMelee(id: string, nom: string): boolean {
+  return id === ARME_MELEE || normaliser(nom) === "melee"
 }
 
 /**
@@ -520,6 +526,7 @@ export function indexCatalogue(cat: unknown): IndexCatalogue | null {
   const tiers = propre(cat, "tiers")
   const themes = propre(cat, "themes")
   const complet = estObjet(tiers) && estObjet(themes)
+  const anglais = langueCatalogue(cat) === "en-US"
   const out: SkinDuCatalogue[] = []
   const armes = new Map<string, string>()
   const editions = new Map<string, Edition>()
@@ -556,9 +563,13 @@ export function indexCatalogue(cat: unknown): IndexCatalogue | null {
       collection = cleCollection(nomTheme)
       if (!collections.has(collection)) collections.set(collection, nomTheme.replace(/\s+/g, " ").trim())
     }
-    // « Vandal (Glitchpop) » → « Glitchpop » (l'arme est dite à côté) ; « Hache (Glitchpop) » (Mêlée) : le nom entier, qui dit l'arme.
+
+
     const parts = separerNom(nom)
-    const titre = parts.skin && normaliser(parts.weapon) === normaliser(armeNom) ? parts.skin : nom
+    const fin = anglais ? " " + armeNom.toLowerCase() : null
+    const titre = parts.skin && normaliser(parts.weapon) === normaliser(armeNom) ? parts.skin
+      : fin !== null && nom.toLowerCase().endsWith(fin) && nom.length > fin.length ? nom.slice(0, nom.length - fin.length).trim() || nom
+        : nom
     out.push({
       skin, niveau, nom, titre, arme, armeNom, edition, collection,
       icone: chaine(propre(n, "icon")),
@@ -566,7 +577,7 @@ export function indexCatalogue(cat: unknown): IndexCatalogue | null {
     })
   }
   const ordreArmes = [...armes].map(([id, nom]) => ({ id, nom }))
-    .sort((a, b) => (estMelee(a.nom) === estMelee(b.nom) ? a.nom.localeCompare(b.nom, "fr") : estMelee(a.nom) ? 1 : -1))
+    .sort((a, b) => (estMelee(a.id, a.nom) === estMelee(b.id, b.nom) ? a.nom.localeCompare(b.nom, "fr") : estMelee(a.id, a.nom) ? 1 : -1))
   const rangArme = new Map(ordreArmes.map((a, i) => [a.id, i]))
   out.sort((a, b) => (rangArme.get(a.arme)! - rangArme.get(b.arme)!) || a.titre.localeCompare(b.titre, "fr") || a.skin.localeCompare(b.skin))
   return {

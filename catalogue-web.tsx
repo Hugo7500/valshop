@@ -13,6 +13,7 @@ import { TABLE_REFERENCE } from "./prix-reference"
 import { construireOrigines, contenuOrigines, ligneJournalOrigines, lireOrigines, originesARefaire, type TableOrigines } from "./origines"
 import { BORNE_JSON, texteBorne } from "./securite"
 import { ecrireSur } from "./stockage"
+import { langueDesNoms } from "./langue"
 import { CATALOG, ORIGINES_FILE, PRIX_FILE, PRIX_VUS_FILE, WISHLIST_FILE, note } from "./valshop"
 import { planifierIle } from "./widgets-ile-app"
 
@@ -88,9 +89,12 @@ const DELAI_ORIGINES_S = 30
  * avec l'ancienne table (ou sans) et la lecture continue : écrite, elle sert à l'ouverture suivante.
  */
 export const ATTENTE_ORIGINES_MS = 4000
-/** Ticket 8.11 (relecture) : la lecture de la table en cours, par version du jeu : une seule à la fois, partagée par les écrans. */
-let origineEnCours: { version: string; p: Promise<TableOrigines | null> } | null = null
-/** Ticket 8.11 : les listes publiques de valorant-api (fr-FR) de la table des origines, dans l'ordre de lecture. */
+
+
+
+
+let origineEnCours: { version: string; langue: string; p: Promise<TableOrigines | null> } | null = null
+/** Ticket 8.11 : les listes publiques de valorant-api de la table des origines (langue des noms), dans l'ordre de lecture. */
 const LISTES_ORIGINES = ["contracts", "seasons", "events", "agents"] as const
 
 /**
@@ -102,13 +106,14 @@ const LISTES_ORIGINES = ["contracts", "seasons", "events", "agents"] as const
  * réessaie. Ne lève jamais.
  */
 export async function tableDesOrigines(shop: unknown, dire: (ligne: string) => void, ecran: string): Promise<TableOrigines | null> {
-  const { table: ancien, aRelire } = originesSurLeDisque(shop)
+  const langue = langueDesNoms()
+  const { table: ancien, aRelire } = originesSurLeDisque(shop, langue)
   const version = (shop as { version?: unknown } | null)?.version
   if (!aRelire || typeof version !== "string") return ancien
-  // Une lecture déjà en cours pour cette version (écran rouvert, autre écran) : la même, jamais une seconde.
-  if (origineEnCours === null || origineEnCours.version !== version) {
-    const p = relireOrigines(version, ancien, dire, ecran)
-    origineEnCours = { version, p }
+  // Une lecture déjà en cours pour cette version et cette langue (écran rouvert, autre écran) : la même, jamais une seconde.
+  if (origineEnCours === null || origineEnCours.version !== version || origineEnCours.langue !== langue) {
+    const p = relireOrigines(version, langue, ancien, dire, ecran)
+    origineEnCours = { version, langue, p }
     p.then(() => { if (origineEnCours !== null && origineEnCours.p === p) origineEnCours = null })
   }
   const enCours = origineEnCours.p
@@ -123,12 +128,13 @@ export async function tableDesOrigines(shop: unknown, dire: (ligne: string) => v
 }
 
 /** Les quatre listes lues, la table construite et écrite ; un échec rend l'ancienne et le dit. Ne lève jamais. */
-async function relireOrigines(version: string, ancien: TableOrigines | null, dire: (ligne: string) => void, ecran: string): Promise<TableOrigines | null> {
+async function relireOrigines(version: string, langue: string, ancien: TableOrigines | null, dire: (ligne: string) => void, ecran: string): Promise<TableOrigines | null> {
   const t0 = Date.now()
   try {
     const reponses: Record<string, unknown> = {}
+
     for (const chemin of LISTES_ORIGINES) {
-      const r = await fetch(`https://valorant-api.com/v1/${chemin}?language=fr-FR`, { timeout: DELAI_ORIGINES_S })
+      const r = await fetch(`https://valorant-api.com/v1/${chemin}?language=${langue}`, { timeout: DELAI_ORIGINES_S })
       if (!r.ok) throw new Error(`${chemin} HTTP ${r.status}`)
       try {
         reponses[chemin] = JSON.parse(await texteBorne(r, BORNE_JSON))
@@ -137,7 +143,7 @@ async function relireOrigines(version: string, ancien: TableOrigines | null, dir
       }
     }
     const t = construireOrigines({ contracts: reponses.contracts, seasons: reponses.seasons, events: reponses.events, agents: reponses.agents },
-      version, new Date().toISOString())
+      version, new Date().toISOString(), langue)
     if (Object.keys(t.objets).length === 0) throw new Error("aucune récompense dans les réponses")
     try {
       ecrireSur(ORIGINES_FILE, contenuOrigines(t))
@@ -167,16 +173,19 @@ let pages = 0
 function preparer(shop: unknown, souhaits: readonly Souhait[]): Prepare | Promise<Prepare> {
   // Ticket 8.11 (relecture) : la table à jour (ou sans version connue) : tout se fait sur place, comme avant 8.11 ; à relire :
   // la page attend sa lecture (ATTENTE_ORIGINES_MS au plus).
-  const lue = originesSurLeDisque(shop)
+  const lue = originesSurLeDisque(shop, langueDesNoms())
   if (!lue.aRelire) return construire(shop, souhaits, lue.table)
   return tableDesOrigines(shop, dire, "catalogue").then((o) => construire(shop, souhaits, o))
 }
 
-/** La table des origines du disque, et s'il faut la relire de valorant-api (version de la boutique connue, autre ou absente). */
-function originesSurLeDisque(shop: unknown): { table: TableOrigines | null; aRelire: boolean } {
+
+
+
+
+function originesSurLeDisque(shop: unknown, langue: string): { table: TableOrigines | null; aRelire: boolean } {
   const table = lireOrigines(lireTexte(ORIGINES_FILE))
   const version = (shop as { version?: unknown } | null)?.version
-  return { table, aRelire: typeof version === "string" && version.length > 0 && originesARefaire(table, version) }
+  return { table, aRelire: typeof version === "string" && version.length > 0 && originesARefaire(table, version, langue) }
 }
 
 /** La page de ce catalogue (catalog.json, prix, table des origines `origines`), construite sur place. */
