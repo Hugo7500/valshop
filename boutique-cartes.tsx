@@ -16,9 +16,13 @@ export type Teintes = {
 export type OffreVue = {
   cle: string; nom: string; arme: string; prix: number | null; icone: string | null; couleur: string | null
   barre?: number | null; remise?: number | null; souhait?: boolean; voix: string; onAppui: () => void
+
+  aToi?: boolean
+  /** Une carte sans prix (Ma collection). */
+  sansPrix?: boolean
 }
 
-export type AccessoireVu = { cle: string; nom: string; type: string; fin?: string; prix: number | null; icone: string | null; voix: string; onAppui: () => void }
+export type AccessoireVu = { cle: string; nom: string; type: string; fin?: string; prix: number | null; icone: string | null; voix: string; onAppui: () => void; aToi?: boolean }
 export type BundleVu = { cle: string; nom: string; prix: number | null; barre: number | null; fin: string; image: string | null; voix: string; onAppui: () => void }
 
 /** Marge de page et écart entre deux cartes, en points. */
@@ -93,6 +97,16 @@ export function EtatBoutique({ t, reset, lue, solde }: {
   )
 }
 
+
+export function MarqueAToi({ petite }: { petite?: boolean }) {
+  return (
+    <HStack spacing={3} padding={{ horizontal: petite ? 6 : 8, top: 3, bottom: 2 }} background={{ style: "rgba(10,14,20,0.82)", shape: "capsule" }} accessibilityHidden>
+      <Image systemName="checkmark" font={petite ? 8 : 10} fontWeight="black" foregroundStyle={C.vert} />
+      <Din t="À TOI" s={petite ? 11 : 13} k={1} c={C.vert} />
+    </HStack>
+  )
+}
+
 /** Le prix d'une offre : l'icône de la monnaie si elle est gardée, le montant, le prix d'avant barré. */
 function PrixOffre({ prix, barre, monnaie, unite }: { prix: number | null; barre?: number | null; monnaie: string | null; unite?: string }) {
   return (
@@ -134,7 +148,7 @@ export function CarteOffre({ o, l, h, monnaie }: { o: OffreVue; l: number; h: nu
         <VStack alignment="leading" spacing={3} padding={{ leading: 11, trailing: 8, bottom: 12 }} frame={{ width: l, height: h, alignment: "bottomLeading" }}>
           {o.arme !== "" ? <Etiquette t={o.arme} s={9.5} /> : null}
           <Din t={o.nom.toUpperCase()} s={25} />
-          <PrixOffre prix={o.prix} barre={o.barre} monnaie={monnaie} />
+          {o.sansPrix ? null : <PrixOffre prix={o.prix} barre={o.barre} monnaie={monnaie} />}
         </VStack>
         <VStack spacing={0} frame={{ width: l, height: h }}>
           <Spacer />
@@ -147,12 +161,15 @@ export function CarteOffre({ o, l, h, monnaie }: { o: OffreVue; l: number; h: nu
             </ZStack>
           </VStack>
         ) : null}
-        {o.souhait ? (
-          <VStack alignment="trailing" padding={9} frame={{ width: l, height: h, alignment: "topTrailing" }}>
-            <ZStack frame={{ width: 28, height: 28 }} background={{ style: "rgba(255,209,102,0.22)", shape: "circle" }}>
-              <Image systemName="star.fill" font={13} foregroundStyle={C.or} />
-            </ZStack>
-          </VStack>
+        {o.souhait || o.aToi ? (
+          <HStack spacing={6} padding={9} frame={{ width: l, height: h, alignment: "topTrailing" }}>
+            {o.aToi ? <MarqueAToi /> : null}
+            {o.souhait ? (
+              <ZStack frame={{ width: 28, height: 28 }} background={{ style: "rgba(255,209,102,0.22)", shape: "circle" }}>
+                <Image systemName="star.fill" font={13} foregroundStyle={C.or} />
+              </ZStack>
+            ) : null}
+          </HStack>
         ) : null}
       </ZStack>
     </Button>
@@ -214,9 +231,12 @@ export function TuileAccessoire({ a, t, monnaie }: { a: AccessoireVu; t: Teintes
   return (
     <Button buttonStyle="plain" action={a.onAppui} accessibilityLabel={a.voix}>
       <VStack spacing={6} padding={{ top: 10, bottom: 10, horizontal: 6 }} frame={{ width: l }} background={{ style: t.surface, shape: { type: "rect", cornerRadius: 16 } }} contentShape="rect">
-        {a.icone ? <Visuel source={a.icone} l={56} h={56} /> : (
-          <ZStack frame={{ width: l - 12, height: 56 }}><Din t={a.nom.toUpperCase()} s={19} echelle={0.5} /></ZStack>
-        )}
+        <ZStack alignment="topTrailing" frame={{ width: l - 12, height: 56 }}>
+          {a.icone ? <Visuel source={a.icone} l={56} h={56} /> : (
+            <ZStack frame={{ width: l - 12, height: 56 }}><Din t={a.nom.toUpperCase()} s={19} echelle={0.5} /></ZStack>
+          )}
+          {a.aToi ? <MarqueAToi petite /> : null}
+        </ZStack>
         <VStack spacing={1} frame={{ width: l - 12 }}>
           <Text font="caption" fontWeight="semibold" foregroundStyle={t.texte} lineLimit={1} minScaleFactor={0.7}>{a.nom}</Text>
           <Etiquette t={a.type} s={8.5} />
@@ -278,3 +298,66 @@ export function BandeauSouhait({ o, l }: { o: OffreVue; l: number }) {
 
 /** Une pastille de solde reprise des widgets : pour l'atelier et les écrans qui montrent un montant seul. */
 export { Pastille }
+
+
+export const PARTAGE = { l: 360, h: 640 }
+
+
+
+
+
+
+export function ImagePartage({ t, date, reset, offres, nuit, monnaie }: {
+  t: Teintes; date: string; reset: string; offres: OffreVue[]; nuit: OffreVue[]; monnaie: string | null
+}) {
+  const marge = 18
+  const l = PARTAGE.l - 2 * marge
+  const lc = Math.floor((l - ECART) / 2)
+  const hc = nuit.length > 0 ? 148 : 184
+  const propres = (o: OffreVue): OffreVue => ({ ...o, souhait: false, aToi: false })
+  const rangees: OffreVue[][] = []
+  for (let i = 0; i < offres.length; i += 2) rangees.push(offres.slice(i, i + 2).map(propres))
+  const nuitMontree = nuit.slice(0, 3).map(propres)
+  const ln = Math.floor((l - ECART * (Math.max(nuitMontree.length, 1) - 1)) / Math.max(nuitMontree.length, 1))
+  return (
+    <ZStack frame={{ width: PARTAGE.l, height: PARTAGE.h }} background={gradient("linear", { colors: ["#1a0d12", t.fond, t.fond], startPoint: "top", endPoint: "bottom" })}>
+      <VStack alignment="leading" spacing={14} padding={{ horizontal: marge, top: 34, bottom: 22 }} frame={{ width: PARTAGE.l, height: PARTAGE.h, alignment: "topLeading" }}>
+        <HStack alignment="bottom" spacing={8}>
+          <RoundedRectangle cornerRadius={1} fill={t.rouge} frame={{ width: 6, height: 30 }} rotationEffect={14} />
+          <VStack alignment="leading" spacing={0}>
+            <Etiquette t={date} s={10} />
+            <Din t="MA BOUTIQUE" s={40} />
+          </VStack>
+          <Spacer />
+          <VStack alignment="trailing" spacing={3}>
+            <Etiquette t="Nouvelle boutique" s={8.5} />
+            <Din t={reset.toUpperCase()} s={20} />
+          </VStack>
+        </HStack>
+        <VStack alignment="leading" spacing={ECART}>
+          {rangees.map((r) => (
+            <HStack key={r[0].cle} spacing={ECART}>
+              {r.map((o) => <CarteOffre key={o.cle} o={o} l={lc} h={hc} monnaie={monnaie} />)}
+            </HStack>
+          ))}
+        </VStack>
+        {nuitMontree.length > 0 ? (
+          <VStack alignment="leading" spacing={8}>
+            <HStack spacing={6}>
+              <RoundedRectangle cornerRadius={1} fill={C.violet} frame={{ width: 4, height: 13 }} rotationEffect={14} />
+              <Din t="NIGHT MARKET" s={17} k={1} />
+            </HStack>
+            <HStack spacing={ECART}>
+              {nuitMontree.map((o) => <CarteOffre key={o.cle} o={o} l={ln} h={128} monnaie={monnaie} />)}
+            </HStack>
+          </VStack>
+        ) : null}
+        <Spacer />
+        <HStack spacing={6}>
+          <Din t="VALSHOP" s={18} k={1.6} c={t.rouge} />
+          <Text font="caption2" foregroundStyle={t.texteDiscret}>ta boutique Valorant sur iPhone</Text>
+        </HStack>
+      </VStack>
+    </ZStack>
+  )
+}

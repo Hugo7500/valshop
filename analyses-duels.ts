@@ -21,6 +21,7 @@
 
 
 
+import { traduire } from "./langue"
 import type { Etat, Kill, Manche, Partie } from "./reduction"
 import {
   TIRET, effectifEnClair, libelleReference, nombreEnClair, retenues,
@@ -256,7 +257,7 @@ function noteCommentTuMeurs(r: Omit<CommentTuMeurs, "chiffres" | "barresVengees"
   const tirets = [r.isolees, r.vengees, r.vengeesIsolees.part, r.vengeesNonIsolees.part].some((c) => c.mention !== null && c.cas > 0)
   if (tirets) morceaux.push(NOTE_TIRET_MORTS)
   morceaux.push(effectifMorts(r.parties, r.sansKills))
-  return morceaux.join(" ")
+  return morceaux.map(traduire).join(" ")
 }
 
 // ─────────────────────────── analyse 10 : à 4 contre 5, à 5 contre 4 ───────────────────────────
@@ -372,5 +373,5 @@ export function noteEtats(e: Etats): string {
   const ecartees = e.completes - e.parties
   if (ecartees > 0) morceaux.push(`${compte(ecartees, "partie")} sans l'état des manches ${ecartees > 1 ? "écartées" : "écartée"}.`)
   if ([e.quatre, e.cinq].some((x) => x.mention !== null && x.den > 0)) morceaux.push(NOTE_TIRET_ETATS)
-  return morceaux.join(" ")
+  return morceaux.map(traduire).join(" ")
 }

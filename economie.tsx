@@ -1,3 +1,4 @@
+import { traduire } from "./langue"
 import {
   EnvironmentValuesReader, HStack, Text, VStack, ZStack,
   type VirtualNode,
@@ -217,13 +218,13 @@ export function noteTableau(lignes: readonly LigneAchat[]): string {
   const gardee = lignes.find((l) => l.type === "gardee")
   if (gardee !== undefined && gardee.manchesConnues !== null) morceaux.push(baseArmeGardee(gardee.manches, gardee.manchesConnues))
   if (raisons.length > 0) morceaux.push(`«${NBSP}${TIRET}${NBSP}» : ${raisons.join(", ou ")}.`)
-  return [...morceaux, ...precisionsDites(lignes, VALEURS_TABLEAU)].join(" ")
+  return [...morceaux, ...precisionsDites(lignes, VALEURS_TABLEAU)].map(traduire).join(" ")
 }
 
 /** La note de Victoires par type de manche : les victoires écrites sur d'autres manches que leur ligne ; aucune sinon. */
 export function noteVictoires(lignes: readonly LigneAchat[]): string | null {
   const p = precisionsDites(lignes, ["victoires"])
-  return p.length > 0 ? p.join(" ") : null
+  return p.length > 0 ? p.map(traduire).join(" ") : null
 }
 
 /** Une Barre paire à montrer : sa clé, son libellé, toi, la référence nommée (null : toi seul), sa phrase VoiceOver. */

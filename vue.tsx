@@ -1,7 +1,7 @@
 import {
   Navigation, NavigationStack, NavigationLink, List, Section, LabeledContent, ContentUnavailableView,
   HStack, VStack, Text, Image, Rectangle, Spacer, Button, EmptyView, EnvironmentValuesReader, GeometryReader, ScrollView, Widget, useEffect, useRef, useState,
-  type VirtualNode,
+  ImageRenderer, type VirtualNode,
 } from "scripting"
 import {
   LIMITE_RECHERCHE, basculer, catalogueAncien, chercher, contient, lireListe, type Souhait,
@@ -23,40 +23,45 @@ import { delaiEnClair } from "./historique"
 import { CATALOG, SHOP_FILE, SOLDE_FILE, WISHLIST_FILE, lireBoutique, loadCookies, note } from "./valshop"
 import { planifierIle } from "./widgets-ile-app"
 import { iconeLisible } from "./securite"
+import { DEJA_A_TOI, VOIX_DEJA_A_TOI, accessoirePossede, skinPossede } from "./possessions"
+import { possessionsLues } from "./possessions-ecran"
+import { MaCollection } from "./collection"
+import { locale } from "./langue"
+import { ImagePartage } from "./boutique-cartes"
 import { ligneSolde, lireSolde, type IssueSolde, type SoldeGarde } from "./solde"
 
-// Onglet Boutique de l'app (app.tsx), ouverte par un appui sur le widget (`?ouvrir=vue`,
-// ou `?ouvrir=connexion` après le login) ou par le lancement du script sans paramètre : la
-// vue détaillée de la v1. Elle lit `shop.json`
-// (par `charger`, que l'app appelle à l'ouverture) et les icônes déjà en cache, et pour la
-// liste de souhaits `catalog.json` et `wishlist.json` : AUCUNE requête à l'affichage, sauf pour une
-// icône restée en adresse web, que le moteur n'écrit plus (la lecture de la boutique, par son bouton ou à l'ouverture de
-// l'app, est plus bas). Seule écriture,
-// `wishlist.json`, réécrite par l'écran de liste à chaque appui (jamais par le moteur).
-// Un appui sur une offre du jour ou du Night Market pousse sa fiche (fiche-skin.tsx,
-// CAP-25), un appui sur un bundle la sienne (fiche-bundle.tsx, qui ouvre à son tour celle
-// de chacun de ses objets), un appui sur un accessoire la sienne (fiche-accessoire.tsx) ;
-// une fiche n'existe qu'après l'appui : c'est elle qui lit catalog.json et charge ses
-// images, jamais le rendu de la liste.
-// Ticket 8.4 : « Tous les skins » (section « Catalogue ») pousse le Catalogue (catalogue-web.tsx), qui lit catalog.json et
-// prix.json à son ouverture seulement, et pousse à son tour la fiche d'un skin ; la liste de souhaits reste tenue ici.
-// Ticket 8.10 : « Tous les accessoires », juste dessous, pousse le catalogue des accessoires (accessoires-web.tsx).
-// « Changer de compte » ferme l'app en rendant ce choix au script (index.tsx), qui
-// ouvre alors la page de login Riot : l'onglet n'en fait pas plus.
-// Entrée 10 de epic-valshop-v1 : « Lire la boutique », dans la section « Dernière lecture /
-// Reset », lance la lecture de ↻ (lireBoutique : garde-fou et verrou compris, sans fenêtre de
-// login), indicateur d'activité pendant elle, puis écrit son issue sous la section et la donne
-// à VoiceOver ; shop.json est relu après chaque appui. Session expirée : « Me connecter » ferme
-// l'app en rendant « connexion », comme l'Écran de connexion.
-// Ticket 2.20 de epic-stats-collecte (ValShop se met à jour tout seul à l'ouverture) : à son montage (après la première
-// page de Stats, ou au premier appui sur l'onglet), la Boutique lance d'elle-même cette même lecture, par le chemin du bouton,
-// si la boutique gardée a expiré (reset lisible et passé) et que des cookies Riot sont au trousseau : une seule tentative par
-// ouverture de l'app, jamais de fenêtre de login ni de nouvel essai ; son issue se dit sous la section, comme après un appui.
-// Hors de cette lecture et de celle du bouton, l'onglet reste sans requête.
-// Entrée 17 de epic-boutique-visuels : la ligne « Solde » (VP, Radianite, Crédits Kingdom), sous « Dernière lecture » et
-// « Reset », lue dans solde.json au montage de l'onglet et après chaque lecture, sans requête ; elle n'existe que pour un solde
-// lu sous la boutique affichée (solde.ts). Un appui sur « Lire la boutique », la boutique déjà à jour, relit le seul solde ; la
-// lecture automatique de l'ouverture, jamais.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /** Même cadre que l'image d'une tuile du widget en format moyen. */
 const CADRE = { width: 68, height: 30 }
@@ -216,6 +221,14 @@ function restant(iso: string | null): string {
   const m = Math.floor((ms % 3600000) / 60000)
   return h > 0 ? `dans ${h} h ${String(m).padStart(2, "0")}` : `dans ${m} min`
 }
+
+
+function jourDeBoutique(iso: string | null | undefined): string {
+  const d = new Date(iso ?? "")
+  if (Number.isNaN(d.getTime())) return ""
+  return new Intl.DateTimeFormat(locale(), { weekday: "long", day: "numeric", month: "long" }).format(d)
+}
+export const REFUS_PARTAGE_BOUTIQUE = "Image pas partagée, réessaie."
 
 /** HH:MM en heure locale ; null si l'horodatage est absent ou illisible. */
 function heureSeule(iso: string | null): string | null {
@@ -454,16 +467,17 @@ function prixLu(prix: number | null, monnaie: "VP" | "KC"): string {
  * à droite, dans un bouton de la liste qui pousse sa fiche ; VoiceOver lit skin, arme et prix à
  * afficher (`prix`, celui que montre la fiche).
  */
-function Offre({ item, prix, onAppui, children }: {
-  item: Item; prix: number | null; onAppui: () => void; children: VirtualNode
+function Offre({ item, prix, onAppui, children, aToi = false }: {
+  item: Item; prix: number | null; onAppui: () => void; children: VirtualNode; aToi?: boolean
 }) {
   const { skin, weapon } = split(item.name)
+
   return (
     <Poussoir
       icon={item.icon}
       titre={skin}
-      secondaire={weapon}
-      libelle={[skin, weapon, prixLu(prix, "VP")].filter((t) => t !== "").join(", ")}
+      secondaire={aToi ? [weapon, DEJA_A_TOI].filter((t) => t !== "").join(" · ") : weapon}
+      libelle={[skin, weapon, prixLu(prix, "VP"), aToi ? VOIX_DEJA_A_TOI : ""].filter((t) => t !== "").join(", ")}
       onAppui={onAppui}
     >
       {children}
@@ -489,16 +503,16 @@ function useStable<A extends unknown[], R>(f: (...a: A) => R): (...a: A) => R {
  * stable) : ouvrir ou fermer une fiche, une lecture en cours, la liste de souhaits changée ne les rendent pas de nouveau. Le
  * même contenu qu'avant, à l'élément près.
  */
-function OffreDuJour({ item, ouvrir }: { item: Item; ouvrir: (item: Item, prix: number | null) => void }) {
+function OffreDuJour({ item, ouvrir, aToi }: { item: Item; ouvrir: (item: Item, prix: number | null) => void; aToi?: boolean }) {
   return (
-    <Offre item={item} prix={item.cost ?? null} onAppui={() => ouvrir(item, item.cost ?? null)}>
+    <Offre item={item} prix={item.cost ?? null} onAppui={() => ouvrir(item, item.cost ?? null)} aToi={aToi}>
       <Prix valeur={item.cost} />
     </Offre>
   )
 }
-function OffreNightMarket({ item, ouvrir }: { item: ItemNM; ouvrir: (item: Item, prix: number | null) => void }) {
+function OffreNightMarket({ item, ouvrir, aToi }: { item: ItemNM; ouvrir: (item: Item, prix: number | null) => void; aToi?: boolean }) {
   return (
-    <Offre item={item} prix={item.discounted ?? null} onAppui={() => ouvrir(item, item.discounted ?? null)}>
+    <Offre item={item} prix={item.discounted ?? null} onAppui={() => ouvrir(item, item.discounted ?? null)} aToi={aToi}>
       <PrixRemise item={item} />
     </Offre>
   )
@@ -516,13 +530,13 @@ function LigneBundle({ bundle: b, pousser }: { bundle: Bundle; pousser: (f: AOuv
     </Poussoir>
   )
 }
-function LigneAccessoire({ accessoire: a, pousser }: { accessoire: Accessoire; pousser: (f: AOuvrir) => void }) {
+function LigneAccessoire({ accessoire: a, pousser, aToi = false }: { accessoire: Accessoire; pousser: (f: AOuvrir) => void; aToi?: boolean }) {
   return (
     <Poussoir
       icon={a.icon}
       titre={a.name}
-      secondaire={`${libelleType(a.kind)} · ${jusquAu(a.endsAt)}`}
-      libelle={[a.name, libelleType(a.kind), prixLu(a.cost, "KC")].join(", ")}
+      secondaire={`${libelleType(a.kind)} · ${jusquAu(a.endsAt)}${aToi ? ` · ${DEJA_A_TOI}` : ""}`}
+      libelle={[a.name, libelleType(a.kind), prixLu(a.cost, "KC"), aToi ? VOIX_DEJA_A_TOI : ""].filter((t) => t !== "").join(", ")}
       onAppui={() => pousser({ quoi: "accessoire", accessoire: a })}
     >
       <PrixKC valeur={a.cost} />
@@ -708,7 +722,7 @@ export type ChoixVue = "changer-de-compte" | "deconnexion" | "connexion" | null
 /** Epic-installation-ami, entrée 11 : la confirmation de « Se déconnecter », dite avant d'agir. */
 export const CONFIRMATION_DECONNEXION = {
   title: "Se déconnecter de Riot ?",
-  message: "ValShop oublie ta session Riot, la boutique et le solde gardés sur cet iPhone. Ton historique de parties, ta liste de souhaits et ta clé HenrikDev restent.",
+  message: "ValShop oublie ta session Riot, la boutique, le solde et ta collection gardés sur cet iPhone. Ton historique de parties et celui de ta boutique, ta liste de souhaits et ta clé HenrikDev restent.",
   confirmLabel: "Se déconnecter",
   cancelLabel: "Annuler",
 }
@@ -722,6 +736,7 @@ type AOuvrir =
   | { quoi: "catalogue" }
   | { quoi: "accessoires" }
   | { quoi: "souhaits" }
+  | { quoi: "collection" }
   | { quoi: "bundle"; bundle: Bundle }
   | { quoi: "accessoire"; accessoire: Accessoire }
 /** Fiche à pousser, avec `ouverture`, numéro qui change à chaque appui : la fiche, restée à sa place, repart de zéro. */
@@ -765,6 +780,7 @@ function lireWidgets(boutique: string, souhaits: readonly Souhait[]) {
 function ficheDe(f: Ouverture | null, catalogue: PourCatalogue): VirtualNode {
   if (!f) return <EmptyView />
 
+  if (f.quoi === "collection") return <MaCollection key={`collection-${f.ouverture}`} />
   if (f.quoi === "souhaits") return <EditeurSouhaits initiale={catalogue.souhaits} onChange={catalogue.onSouhaits} />
   if (f.quoi === "catalogue") return <CatalogueSkins shop={catalogue.shop} souhaits={catalogue.souhaits} onSouhaits={catalogue.onSouhaits} ouverture={f.ouverture} />
   if (f.quoi === "accessoires") return <CatalogueAccessoires shop={catalogue.shop} ouverture={f.ouverture} />
@@ -821,6 +837,8 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
   const [lecture, setLecture] = useState<EtatLecture>({ enCours: false, issue: null, phrase: null, reessai: null })
   // Entrée 17 de epic-boutique-visuels : le solde gardé, lu au montage de l'onglet (sans requête), relu après chaque lecture.
   const [solde, setSolde] = useState<SoldeGarde | null>(chargerSolde)
+
+  const [possedes, setPossedes] = useState(() => possessionsLues().possedes)
   const occupe = useRef(false)
   // `appui` : lancée par le bouton (la boutique déjà à jour, le moteur relit le seul solde) ; faux : la lecture automatique.
   const lire = useStable(async (appui: boolean) => {
@@ -840,6 +858,7 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
     // Le solde aussi, de même : celui que la lecture vient de garder, ou celui d'avant.
     const garde = chargerSolde()
     setSolde(garde)
+    setPossedes(possessionsLues().possedes)
     // Un délai déjà passé au retour (journal lent, verrou d'autrui repris) : « Tu peux réessayer » tout de suite.
     const fin = Date.now()
     const attente = issue.genre === "en-cours" ? issue.reessai : null
@@ -852,6 +871,23 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
     planifierIle()
   })
   const lireAppui = useStable(() => lire(true))
+
+
+  const partageEnCours = useRef(false)
+  const [refusPartage, setRefusPartage] = useState(false)
+  const partagerImage = async (vue: VirtualNode) => {
+    if (partageEnCours.current) return
+    partageEnCours.current = true
+    setRefusPartage(false)
+    try {
+      const image = await ImageRenderer.toUIImage(vue, { scale: 3, opaque: true })
+      await ShareSheet.present([image])
+    } catch {
+      setRefusPartage(true)
+    } finally {
+      partageEnCours.current = false
+    }
+  }
   // Le délai dit d'une lecture déjà en cours passé, la phrase le dit à son tour.
   const reessai = lecture.reessai
   useEffect(() => {
@@ -896,20 +932,8 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
     fin.then(() => { if (auto.lecture === fin) auto.lecture = null })
     return () => { montee = false }
   }, [])
-  // Epic-installation-ami, entrée 11 : « Se déconnecter », après confirmation seulement (annulée, ou dialogue en erreur :
-  // rien) ; une seule demande à la fois. Comme le changement de compte, la déconnexion se fait l'app fermée, par le script.
-  const demande = useRef(false)
-  const deconnecter = useStable(async () => {
-    if (demande.current) return
-    demande.current = true
-    try {
-      if (await Dialog.confirm(CONFIRMATION_DECONNEXION)) fermer("deconnexion")
-    } catch {
-      // Dialogue indisponible : rien n'est fait sans confirmation.
-    } finally {
-      demande.current = false
-    }
-  })
+
+
   const nm = shop.nightMarket
   const offresNM = (nm?.active ? nm.items ?? [] : []).map(garder)
   const bundles = (Array.isArray(shop.bundles) ? shop.bundles : []).map(garder)
@@ -921,6 +945,23 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
 
 
   const { monnaies, attendu } = lireWidgets(shop.updatedAt, souhaits)
+  // Les offres telles que les cartes et l'image à partager les montrent.
+  const vp = monnaies.vp, kc = monnaies.kc
+
+  const vue = (item: Item, prix: number | null, plus: Partial<OffreVue> = {}): OffreVue => {
+    const { skin, weapon } = split(item.name)
+    const aToi = skinPossede(possedes, [item.id]) === true
+    return {
+      cle: item.id, nom: skin, arme: weapon, prix, icone: iconeLisible(item.icon, FileManager.appGroupDocumentsDirectory), couleur: couleurRarete(item.color),
+      souhait: attendu !== null && attendu.nom === skin && attendu.arme.toUpperCase() === weapon.toUpperCase(), aToi,
+      voix: [skin, weapon, prixLu(prix, "VP"), aToi ? VOIX_DEJA_A_TOI : ""].filter((x) => x !== "").join(", "), onAppui: () => ouvrir(item, prix), ...plus,
+    }
+  }
+  const duJour = offresDuJour.map((i) => vue(i, i.cost ?? null))
+  const nuit = offresNM.map((i) => vue(i, i.discounted ?? null, { barre: i.cost, remise: i.discountPercent, souhait: false }))
+  const partager = () => partagerImage(
+    <ImagePartage t={COULEURS.standard} date={jourDeBoutique(shop.updatedAt)} reset={restant(shop.daily.resetAt)} offres={duJour} nuit={nuit} monnaie={vp} />,
+  )
   // Le titre, masqué avec la barre, ne sert plus que de libellé au retour de l'éditeur.
   const destination = {
     isPresented: pile.poussee,
@@ -959,16 +1000,18 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
           {!lecture.enCours && lecture.issue?.genre === "session" ? (
             <BoutonSecondaire libelle="Me connecter" action={() => fermer("connexion")} />
           ) : null}
+          <BoutonSecondaire libelle="Partager ma boutique" icone="square.and.arrow.up" action={partager} />
+          {refusPartage ? <PiedLecture phrase={REFUS_PARTAGE_BOUTIQUE} /> : null}
         </Section>
         <Section title="Boutique du jour">
           {offresDuJour.map((item) => (
-            <OffreDuJour key={item.id} item={item} ouvrir={ouvrir} />
+            <OffreDuJour key={item.id} item={item} ouvrir={ouvrir} aToi={skinPossede(possedes, [item.id]) === true} />
           ))}
         </Section>
         <Section title="Night Market">
           {offresNM.length > 0 ? (
             offresNM.map((item) => (
-              <OffreNightMarket key={item.id} item={item} ouvrir={ouvrir} />
+              <OffreNightMarket key={item.id} item={item} ouvrir={ouvrir} aToi={skinPossede(possedes, [item.id]) === true} />
             ))
           ) : (
             <Text foregroundStyle="secondaryLabel">Pas de Night Market</Text>
@@ -986,7 +1029,7 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
         <Section title="Accessoires">
           {accessoires.length > 0 ? (
             accessoires.map((a) => (
-              <LigneAccessoire key={a.id} accessoire={a} pousser={pousser} />
+              <LigneAccessoire key={a.id} accessoire={a} pousser={pousser} aToi={accessoirePossede(possedes, a.kind, a.id) === true} />
             ))
           ) : (
             <Text foregroundStyle="secondaryLabel">Pas d'accessoire</Text>
@@ -995,18 +1038,19 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
         <Section title="Catalogue">
           <LigneCatalogue pousser={pousser} />
           <LigneAccessoires pousser={pousser} />
+          <Button action={() => pousser({ quoi: "collection" })} accessibilityLabel="Ma collection" accessibilityHint="Les skins et objets déjà à toi">
+            <HStack spacing={10}>
+              <Text font="body" foregroundStyle="label">Ma collection</Text>
+              <Spacer />
+              <Image systemName="chevron.right" font="footnote" foregroundStyle="tertiaryLabel" />
+            </HStack>
+          </Button>
         </Section>
         <Section title="Liste de souhaits">
           <NavigationLink
             title={`Modifier (${souhaits.length})`}
             destination={<EditeurSouhaits initiale={souhaits} onChange={setSouhaits} />}
           />
-        </Section>
-        <Section title="Compte">
-          {/* Entrée 10 : inactif pendant une lecture, qui viserait encore l'ancien compte. */}
-          <Button title="Changer de compte" disabled={lecture.enCours} action={() => fermer("changer-de-compte")} />
-          {/* Epic-installation-ami, entrée 11 : après confirmation, l'app se ferme et le script déconnecte (index.tsx). */}
-          <Button title="Se déconnecter" role="destructive" disabled={lecture.enCours} action={deconnecter} />
         </Section>
       </List>
   )
@@ -1015,19 +1059,8 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
   const cartes = (c: ReturnType<typeof couleurs>, largeurEcran: number) => {
     const t: Teintes = c
     const l = largeurEcran - 2 * MARGE_PAGE
-    const lt = Math.floor((l - 2 * ECART) / 3)
-    const vp = monnaies.vp, kc = monnaies.kc
-    const vue = (item: Item, prix: number | null, plus: Partial<OffreVue> = {}): OffreVue => {
-      const { skin, weapon } = split(item.name)
-      return {
-        cle: item.id, nom: skin, arme: weapon, prix, icone: iconeLisible(item.icon, FileManager.appGroupDocumentsDirectory), couleur: couleurRarete(item.color),
-        souhait: attendu !== null && attendu.nom === skin && attendu.arme.toUpperCase() === weapon.toUpperCase(),
-        voix: [skin, weapon, prixLu(prix, "VP")].filter((x) => x !== "").join(", "), onAppui: () => ouvrir(item, prix), ...plus,
-      }
-    }
-    const duJour = offresDuJour.map((i) => vue(i, i.cost ?? null))
+    const lt = Math.floor((l - ECART) / 2)
     const voeu = duJour.find((o) => o.souhait) ?? null
-    const nuit = offresNM.map((i) => vue(i, i.discounted ?? null, { barre: i.cost, remise: i.discountPercent, souhait: false }))
     const texteDiscret = (x: string) => <Text {...TYPO.corps} foregroundStyle={c.texteDiscret}>{x}</Text>
     return (
       <ScrollView navigationTitle="ValShop" navigationBarVisibility="hidden" background={FOND} navigationDestination={destination}>
@@ -1047,6 +1080,12 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
               <BoutonSecondaire libelle="Me connecter" action={() => fermer("connexion")} />
             ) : null}
             {lecture.enCours || lecture.phrase ? <PiedLecture phrase={lecture.enCours ? LECTURE_EN_COURS : lecture.phrase ?? ""} /> : null}
+            <BoutonSecondaire
+              libelle="Partager ma boutique"
+              icone="square.and.arrow.up"
+              action={partager}
+            />
+            {refusPartage ? <PiedLecture phrase={REFUS_PARTAGE_BOUTIQUE} /> : null}
           </Carte>
           {voeu !== null ? <BandeauSouhait o={voeu} l={l} /> : null}
           <TitreSection t={t} titre="Boutique du jour" />
@@ -1073,7 +1112,9 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
                   key={a.id}
                   a={{
                     cle: a.id, nom: a.name, type: libelleType(a.kind), fin: jusquAu(a.endsAt), prix: a.cost, icone: iconeLisible(a.icon, FileManager.appGroupDocumentsDirectory),
-                    voix: [a.name, libelleType(a.kind), prixLu(a.cost, "KC")].join(", "), onAppui: () => pousser({ quoi: "accessoire", accessoire: a }),
+                    aToi: accessoirePossede(possedes, a.kind, a.id) === true,
+                    voix: [a.name, libelleType(a.kind), prixLu(a.cost, "KC"), accessoirePossede(possedes, a.kind, a.id) === true ? VOIX_DEJA_A_TOI : ""].filter((x) => x !== "").join(", "),
+                    onAppui: () => pousser({ quoi: "accessoire", accessoire: a }),
                   }}
                   t={t}
                   monnaie={kc}
@@ -1082,16 +1123,17 @@ export function Boutique({ shop: ouverte, entete, souhaits: souhaitsLus, auto }:
             </Defilant>
           ) : texteDiscret("Pas d'accessoire")}
           <TitreSection t={t} titre="Explorer" />
-          <HStack spacing={ECART}>
-            <TuileAcces t={t} titre="Tous les skins" sous="Catalogue" l={lt} image={duJour[0]?.icone ?? null} voix="Tous les skins" indice="Prix, variantes et vidéos de chaque skin" onAppui={() => pousser({ quoi: "catalogue" })} />
-            <TuileAcces t={t} titre="Tous les accessoires" sous="Catalogue" l={lt} voix="Tous les accessoires" indice="Porte-bonheur, tags, cartes, titres et flex, avec leur prix" onAppui={() => pousser({ quoi: "accessoires" })} />
-            <TuileAcces t={t} titre="Mes souhaits" sous={`${souhaits.length} ${souhaits.length > 1 ? "suivis" : "suivi"}`} l={lt} or voix={`Liste de souhaits, modifier, ${souhaits.length}`} onAppui={() => pousser({ quoi: "souhaits" })} />
-          </HStack>
-          <TitreSection t={t} titre="Compte" />
-          <HStack spacing={ECART}>
-            <BoutonSecondaire libelle="Changer de compte" inactif={lecture.enCours} action={() => fermer("changer-de-compte")} />
-            <BoutonSecondaire libelle="Se déconnecter" inactif={lecture.enCours} destructif action={deconnecter} />
-          </HStack>
+          { }
+          <VStack alignment="leading" spacing={ECART}>
+            <HStack spacing={ECART}>
+              <TuileAcces t={t} titre="Tous les skins" sous="Catalogue" l={lt} image={duJour[0]?.icone ?? null} voix="Tous les skins" indice="Prix, variantes et vidéos de chaque skin" onAppui={() => pousser({ quoi: "catalogue" })} />
+              <TuileAcces t={t} titre="Tous les accessoires" sous="Catalogue" l={lt} voix="Tous les accessoires" indice="Porte-bonheur, tags, cartes, titres et flex, avec leur prix" onAppui={() => pousser({ quoi: "accessoires" })} />
+            </HStack>
+            <HStack spacing={ECART}>
+              <TuileAcces t={t} titre="Ma collection" sous="Skins et objets à toi" l={lt} image={duJour[1]?.icone ?? null} voix="Ma collection" indice="Les skins et objets déjà à toi" onAppui={() => pousser({ quoi: "collection" })} />
+              <TuileAcces t={t} titre="Mes souhaits" sous={`${souhaits.length} ${souhaits.length > 1 ? "suivis" : "suivi"}`} l={lt} or voix={`Liste de souhaits, modifier, ${souhaits.length}`} onAppui={() => pousser({ quoi: "souhaits" })} />
+            </HStack>
+          </VStack>
         </VStack>
       </ScrollView>
     )

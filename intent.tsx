@@ -1,3 +1,4 @@
+import { traduireHorsVue } from "./langue"
 import { Script, Intent } from "scripting"
 import { refresh } from "./valshop"
 import { messageHote } from "./historique"
@@ -8,7 +9,8 @@ import { lireCompte } from "./stockage"
 
 async function run() {
   const summary = await refresh(false)
-  Script.exit(Intent.text(summary))
+  // Le texte rendu à Raccourcis ne passe par aucune vue : traduit ici dans la langue de l'appareil (en français, tel quel).
+  Script.exit(Intent.text(await traduireHorsVue(summary)))
 }
 
 /** Ticket 7.8 (F1) : le texte d'une erreur pour la sortie de l'intent : sans chemin, UUID ni PUUID du compte (messageHote). */
@@ -18,7 +20,7 @@ function texteSur(err: unknown): string {
   try { return messageHote(String(err), [puuid]) } catch { return "erreur illisible" }
 }
 
-run().catch((err) => {
+run().catch(async (err) => {
   console.log("💥 " + texteSur(err))
-  Script.exit(Intent.text("erreur : " + texteSur(err)))
+  Script.exit(Intent.text(await traduireHorsVue("erreur : " + texteSur(err))))
 })

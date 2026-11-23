@@ -25,6 +25,7 @@
 
 
 
+import { traduire } from "./langue"
 import type { Arme, Kill, Manche, Partie, Touches } from "./reduction"
 import type { SectionArmes } from "./ressources"
 import { FILES_ARMES, POURCENTAGE, TIRET, armeDuKill, fileAdmise, nombreEnClair, type Files, type Selection } from "./metriques"
@@ -220,7 +221,7 @@ export function teteSelonLaDistance(sel: Selection): TeteSelonLaDistance {
     if (sp > 0) dits.push(`${compte(sp, "kill")} sans position, hors du calcul`)
     return {
       ...x.tout, nom, libelle: `${nom}${NBSP}· ${nombreEnClair(x.tout.kills, 0)}`, tranches, sansPosition: x.sansPosition, precision,
-      phrase: `${nom}, ${compte(x.tout.kills, "kill")} : ${dits.join(" ; ")}.`,
+      phrase: `${nom}, ${compte(x.tout.kills, "kill")} : ${dits.map(traduire).join(" ; ")}.`,
     }
   })
   lignes.sort((p, q) => q.kills - p.kills || p.nom.localeCompare(q.nom, "fr"))
@@ -240,7 +241,7 @@ export function noteTeteDistance(t: TeteSelonLaDistance): string {
   const precises = t.lignes.filter((l) => l.precision !== null).map((l) => `${l.nom} ${l.precision}`)
   if (precises.length > 0) morceaux.push(`Un kill sans position sort du calcul : ${precises.join(", ")}.`)
   if (t.texteEffectif !== null) morceaux.push(t.texteEffectif)
-  return morceaux.join(" ")
+  return morceaux.map(traduire).join(" ")
 }
 /** Ce que dit un « — » sans « peu de données » : 5 kills ou plus dans la tranche, aucune touche relevée. */
 const TIRET_SANS_TOUCHE = `«${NBSP}${TIRET}${NBSP}», aucune touche relevée`
@@ -388,7 +389,7 @@ export function noteDuelsDistance(d: DuelsSelonLaDistance): string | null {
   if (hors.length > 0) morceaux.push(`Duels à l'arme seulement : ${hors.join(" et ")}, hors du calcul.`)
   if (d.sansPosition.duels > 0) morceaux.push(`${compte(d.sansPosition.duels, "duel")} à l'arme sans position, hors du calcul.`)
   if (d.texteEffectif !== null) morceaux.push(d.texteEffectif)
-  return morceaux.length === 0 ? null : morceaux.join(" ")
+  return morceaux.length === 0 ? null : morceaux.map(traduire).join(" ")
 }
 
 // ─────────────────────────── analyses 3 et 4 : arme ramassée et grosse arme perdue ───────────────────────────
@@ -645,7 +646,7 @@ export function noteArmeEtFusil(r: ArmeRamassee, f: FusilPerdu): string | null {
   if (f.inconnues > 0) hors.push(compte(f.inconnues, "manche"))
   if (hors.length > 0) morceaux.push(`Hors du calcul, faute de catégorie d'arme connue : ${hors.join(" et ")}.`)
   if (effectif !== null) morceaux.push(effectif)
-  return morceaux.join(" ")
+  return morceaux.map(traduire).join(" ")
 }
 
 

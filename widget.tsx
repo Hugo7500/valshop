@@ -8,6 +8,8 @@ import { iconeLisible } from "./securite"
 import { lireReglageGarde } from "./widgets-fichier"
 import { CARROUSEL, CLASSIQUE, carrouselDe, contenuDe, numeroDe, periodeDe, tailleDe } from "./widgets-reglage"
 import type { CarrouselRegle } from "./widgets-entree"
+import { installerTraduction, langueDe } from "./langue"
+import { preferencesGardees } from "./preferences"
 
 // Le widget ne va JAMAIS sur le réseau de lui-même et n'écrit rien : il lit shop.json,
 // etat.json et les icônes que la dernière mise à jour a mises en cache, et offre un
@@ -230,35 +232,45 @@ function presenter() {
   })
 }
 
-// Lot 1 de l'étude des widgets : l'écran « Mes widgets » (widgets.json) dit quel contenu montre chaque widget, par taille ; un widget
-// se désigne par le nombre écrit dans sa case « Paramètre » (rien : le 1). Sans réglage, ou si le nouveau widget ne se charge pas
-// ou n'a pas de boutique à montrer : le widget ordinaire ci-dessus, inchangé. Les nouveaux widgets sont chargés ici seulement
-// (widgets-entree.tsx), pour que rien d'eux ne pèse sur le widget ordinaire.
-let mot = ""
-try {
-  mot = String(Widget.parameter ?? "").trim().toLowerCase()
-} catch { /* sans paramètre lisible : le widget 1 */ }
-let contenu = CLASSIQUE
-let periode: string | undefined
-// Lot 3 : le carrousel de ce widget, si c'est ce qu'il montre. Lot 4 : sur l'écran verrouillé, où le widget ordinaire ne
-// tient pas, un widget sans réglage montre le premier contenu de sa forme (contenuDe), jamais « classique ».
-let car: CarrouselRegle | undefined
-try {
-  const reglage = lireReglageGarde()
-  const numero = numeroDe(mot)
-  const taille = tailleDe(Widget.family)
-  contenu = contenuDe(reglage, numero, taille)
-  periode = periodeDe(reglage, numero)
-  if (contenu === CARROUSEL && taille !== null) car = { ...carrouselDe(reglage, numero, taille), numero, taille }
-} catch { /* réglage illisible : le widget ordinaire */ }
-if (contenu !== CLASSIQUE) {
-  import("./widgets-entree").then((m) => {
-    if (!m.presenterWidget(contenu, periode, car)) presenter()
-  }).catch(() => {
-    // Sur l'écran verrouillé, le widget ordinaire ne tient pas : un mot suffit.
-    if (String(Widget.family).startsWith("accessory")) Widget.present(<Text>ValShop</Text>)
-    else presenter()
-  })
-} else {
-  presenter()
+
+
+
+
+
+function lancer() {
+  let mot = ""
+  try {
+    mot = String(Widget.parameter ?? "").trim().toLowerCase()
+  } catch { /* sans paramètre lisible : le widget 1 */ }
+  let contenu = CLASSIQUE
+  let periode: string | undefined
+  // Lot 3 : le carrousel de ce widget, si c'est ce qu'il montre. Lot 4 : sur l'écran verrouillé, où le widget ordinaire ne
+  // tient pas, un widget sans réglage montre le premier contenu de sa forme (contenuDe), jamais « classique ».
+  let car: CarrouselRegle | undefined
+  try {
+    const reglage = lireReglageGarde()
+    const numero = numeroDe(mot)
+    const taille = tailleDe(Widget.family)
+    contenu = contenuDe(reglage, numero, taille)
+    periode = periodeDe(reglage, numero)
+    if (contenu === CARROUSEL && taille !== null) car = { ...carrouselDe(reglage, numero, taille), numero, taille }
+  } catch { /* réglage illisible : le widget ordinaire */ }
+  if (contenu !== CLASSIQUE) {
+    import("./widgets-entree").then((m) => {
+      if (!m.presenterWidget(contenu, periode, car)) presenter()
+    }).catch(() => {
+      // Sur l'écran verrouillé, le widget ordinaire ne tient pas : un mot suffit.
+      if (String(Widget.family).startsWith("accessory")) Widget.present(<Text>ValShop</Text>)
+      else presenter()
+    })
+  } else {
+    presenter()
+  }
+}
+{
+  // En français (le cas ordinaire), le widget se présente tout de suite, comme avant ; en anglais, après le dictionnaire.
+  let l: "fr" | "en" = "fr"
+  try { l = langueDe(preferencesGardees().langue, Device.systemLanguageCode) } catch { /* français */ }
+  if (l === "fr") lancer()
+  else installerTraduction(l).then(lancer, lancer)
 }

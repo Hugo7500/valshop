@@ -11,6 +11,7 @@
 // les autres `hidden`. Comme les sections : leur `hidden` hors du squelette ; la vue montrée changée : l'opération « vue »
 // (l'hôte pousse ou dépile, page-web.tsx) ; un morceau `data-vue` remplacé garde la visibilité de l'ancien (dans l'hôte comme ici).
 
+import { traduire } from "./langue"
 import type { VueWeb } from "./rendu"
 
 export type Operation =
@@ -254,7 +255,7 @@ export function menusWeb(menus: Map<string, VueWeb>): { html: string; actions: M
     // Relecture C13 : le panneau dit l'étiquette du Menu, son indice à part ; C2 : modal pour VoiceOver, fond nommé « Fermer ».
     const etiquette = menu.props.accessibilityLabel ?? ""
     const indice = menu.props.accessibilityHint ? ` aria-description="${echapper(menu.props.accessibilityHint)}"` : ""
-    html += `<div class="vm" data-menu-pour="${echapper(id)}" hidden><div class="vm-fond" data-menu-fermer="1" role="button" aria-label="Fermer"></div>` +
+    html += `<div class="vm" data-menu-pour="${echapper(id)}" hidden><div class="vm-fond" data-menu-fermer="1" role="button" aria-label="${echapper(traduire("Fermer"))}"></div>` +
       `<div class="vm-panneau" role="menu" aria-modal="true" aria-label="${echapper(etiquette)}"${indice}>${sections}</div></div>`
   }
   return { html: `<div id="menus-web">${html}</div>`, actions }

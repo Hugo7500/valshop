@@ -54,7 +54,7 @@ Ouvre ValShop au moins toutes les deux semaines pour ne rien perdre.
 
 Tout reste sur ton iPhone. ValShop ne parle qu'à :
 
-- **Riot** : ta connexion, ta boutique et le solde de ton compte (Points VALORANT, Radianite, Crédits Kingdom) ;
+- **Riot** : ta connexion, ta boutique, le solde de ton compte (Points VALORANT, Radianite, Crédits Kingdom) et, app ouverte, ce que tu possèdes (skins et accessoires, pour la marque « À TOI » et « Ma collection ») ;
 - **HenrikDev** : tes parties, avec ta clé ;
 - **valorant-api.com** : les noms et les images du jeu ;
 - **GitHub** : une fois par jour au plus, ValShop lit le numéro de la dernière version publiée ici ; rien n'est envoyé.
@@ -67,7 +67,7 @@ Rien n'est envoyé à la personne qui t'a donné le lien. Le bouton **Envoyer le
 
 - **N'installe pas de scripts douteux dans Scripting.** Les scripts de Scripting partagent le même environnement sur ton iPhone : un script malveillant installé à côté de ValShop pourrait lire ses fichiers (tes stats, ta boutique, ton solde, ton identifiant de joueur) et même, en se faisant passer pour ValShop, lire ta session Riot et ta clé. N'installe que des scripts dont tu connais l'auteur.
 - **Révoquer ta clé HenrikDev.** Sur le tableau de bord de HenrikDev (<https://api.henrikdev.xyz/dashboard/>), menu **API Keys** : supprime la clé, puis crée-en une nouvelle si tu veux continuer. Dans ValShop, **Retirer la clé** (**Réglages**, groupe **Stats**) l'efface de ton iPhone.
-- **Te déconnecter de Riot.** Dans l'onglet **Boutique**, tout en bas, touche **Se déconnecter** : ValShop efface ta session Riot de ton iPhone, avec la boutique et le solde qu'il gardait. Ton historique de parties, ta liste de souhaits et ta clé HenrikDev restent (pour la clé : **Retirer la clé**, dans les **Réglages**). Pour fermer aussi la session chez Riot, change ton mot de passe sur le site de Riot.
+- **Te déconnecter de Riot.** Dans les **Réglages** (l'engrenage en haut), groupe **Ton compte**, touche **Se déconnecter** puis confirme : ValShop efface ta session Riot de ton iPhone, avec la boutique, le solde et ta collection qu'il gardait. Ton historique de parties, celui de ta boutique, ta liste de souhaits et ta clé HenrikDev restent (pour la clé : **Retirer la clé**, dans les **Réglages**). Pour fermer aussi la session chez Riot, change ton mot de passe sur le site de Riot.
 - **Supprimer ValShop ne te déconnecte pas forcément.** Ta session Riot et ta clé HenrikDev sont rangées dans le trousseau de ton iPhone, qui peut les garder après la suppression de ValShop, et même de l'app Scripting : une réinstallation les retrouverait. Avant de supprimer, touche **Se déconnecter** et **Retirer la clé**. Tes stats et le journal restent dans le dossier commun de Scripting, où d'autres scripts peuvent les lire.
 - **Mettre à jour, c'est faire confiance à l'auteur de ce dépôt.** Chaque nouvelle version installe le code publié ici, tel que son auteur l'a écrit. Ne mets à jour que depuis ce dépôt, par le bouton **Mettre à jour ValShop** ou ton lien d'installation.
 

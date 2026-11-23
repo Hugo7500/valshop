@@ -1,3 +1,4 @@
+import { langue, traduire } from "./langue"
 import {
   Button, EnvironmentValuesReader, HStack, Image, LazyVStack, Menu, Picker, ProgressView, Rectangle, RoundedRectangle, ScrollView, Section,
   Spacer, Text, VStack, ZStack, type Color, type ColorSchemeContrast, type DynamicTypeSize, type Font, type FontWeight, type VirtualNode,
@@ -434,8 +435,11 @@ export const REPLIS_LIGNE = { reglageEnFeuille: false }
 
 
 export function phraseLigne(parle: string, detail: string): string {
-  const dit = (detail.charAt(0).toLowerCase() + detail.slice(1)).split(" · ").join(", ")
-  return `${parle} : ${dit}${/[.…]$/.test(dit) ? "" : "."}`
+  // En anglais, traduits avant la minuscule et les virgules, qui changeraient leur forme (anglais.ts) ; en français, tels quels.
+  const d = traduire(detail)
+  const dit = (d.charAt(0).toLowerCase() + d.slice(1)).split(" · ").join(", ")
+  // Ses morceaux déjà traduits : en anglais, deux-points sans espace avant (en français, la phrase telle quelle).
+  return `${traduire(parle)}${langue() === "en" ? ":" : " :"} ${dit}${/[.…]$/.test(dit) ? "" : "."}`
 }
 
 /** Un choix reçu du Réglage : appliqué s'il est l'un de ceux de la section et n'est pas déjà le sien ; sinon rien. */
@@ -450,7 +454,8 @@ function choisir(s: SectionReglage, cle: string) {
  */
 function detailDeLigne(c: Palette, detail: string, ancienne: { avant: string; age: string; apres: string } | undefined, trait: "updatesFrequently" | undefined, cadre: boolean): VirtualNode {
   // Police redite sur le morceau orange : rien n'assure qu'un morceau hérite de celle du texte.
-  const age = ancienne ? { content: ancienne.age, font: TYPO.petit.font, fontWeight: TYPO.petit.fontWeight, foregroundColor: c.orange } : null
+  // Texte riche : ses morceaux ne passent pas par la fabrique JSX, traduits ici (en français, tels quels).
+  const age = ancienne ? { content: traduire(ancienne.age), font: TYPO.petit.font, fontWeight: TYPO.petit.fontWeight, foregroundColor: c.orange } : null
   return (
     <HStack
       spacing={ESPACES.puces}
@@ -464,7 +469,7 @@ function detailDeLigne(c: Palette, detail: string, ancienne: { avant: string; ag
             font: TYPO.petit.font,
             fontWeight: TYPO.petit.fontWeight,
             foregroundColor: c.texteDiscret,
-            content: [ancienne.avant, age, ancienne.apres].filter((m) => m !== ""),
+            content: [traduire(ancienne.avant), age, traduire(ancienne.apres)].filter((m) => m !== ""),
           }}
           accessibilityAddTraits={trait}
         />
@@ -516,7 +521,7 @@ export function LigneEtat({ detail, ancienne, suivie = true, perimetre, uneLigne
             contentShape="rect"
           >
             <Text {...TYPO.petitFort} foregroundStyle={c.texte} fixedSize={uneLigne ? { horizontal: true, vertical: false } : undefined}>
-              {perimetre.libelle + MARQUE_REGLAGE}
+              {traduire(perimetre.libelle) + MARQUE_REGLAGE}
             </Text>
             {detailDeLigne(c, detail, ancienne, undefined, false)}
           </VStack>
@@ -721,7 +726,7 @@ export function Chiffre({ libelle, valeur, sousTexte }: { libelle: string; valeu
             frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
             background={creux(c)}
             accessibilityElement
-            accessibilityLabel={`${libelle} : ${valeur}, ${sousTexte}`}
+            accessibilityLabel={`${libelle}${langue() === "en" ? ":" : " :"} ${valeur}, ${sousTexte}`}
           >
             <Text {...TYPO.note} foregroundStyle={c.texteDiscret}>
               {libelle}

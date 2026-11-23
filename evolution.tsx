@@ -1,3 +1,4 @@
+import { traduire } from "./langue"
 import {
   EnvironmentValuesReader, HStack, Rectangle, Text, VStack, ZStack, type Color, type DynamicTypeSize, type StyledText, type VirtualNode,
 } from "scripting"
@@ -603,11 +604,12 @@ export function moyennesRr(b: BarresRr): Morceau[] | null {
   if (b.texteParVictoire !== null) parts.push([b.texteParVictoire, "par victoire"])
   if (b.texteParDefaite !== null) parts.push([b.texteParDefaite, "par défaite"])
   if (parts.length === 0) return null
-  const morceaux: Morceau[] = [`En moyenne${NBSP}: `]
+  // Texte riche : ses morceaux ne passent pas par la fabrique JSX, traduits ici (en français, tels quels).
+  const morceaux: Morceau[] = [traduire(`En moyenne${NBSP}: `)]
   parts.forEach(([valeur, quoi], i) => {
     const s = signeEcrit(valeur)
     morceaux.push({ valeur, evaluation: s === "haut" ? "fort" : s === "bas" ? "faible" : "neutre" })
-    morceaux.push(` ${quoi}${i === parts.length - 1 ? "." : ", "}`)
+    morceaux.push(traduire(` ${quoi}${i === parts.length - 1 ? "." : ", "}`))
   })
   return morceaux
 }

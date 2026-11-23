@@ -25,6 +25,8 @@ import { mvpDeLaPartie, type Cote, type Fleches, type Groupe, type Kill, type Ma
 import type { SectionCartes } from "./ressources"
 import { SectionAgentsDeLaPartie } from "./agents-adverses"
 import { ZONE_LA_PLUS_PROCHE } from "./analyses-cartes"
+// En anglais, chaque morceau d'une phrase assemblée traduit seul avant d'être joint (anglais.ts) ; en français, tel quel.
+import { traduire } from "./langue"
 
 // Module du sous-onglet Parties de l'onglet Stats (entrée 31 de epic-stats-tableau-de-bord ; DESIGN.md, selecteur-segmente,
 // bloc, frise-manches, legende, ligne-partie, badge-mention, bouton-mettre-a-jour ; EXPERIENCE.md, Information Architecture,
@@ -433,7 +435,7 @@ export function ligneDePartie(p: Partie, rr: ReadonlyMap<string, LigneRr>, annee
     note,
     kda: bas.join(SEP),
     mention,
-    phrase: `${capitale(dits.join(", "))}.`,
+    phrase: `${capitale(dits.map(traduire).join(", "))}.`,
   }
 }
 
@@ -482,7 +484,7 @@ export function friseDeLaPartie(p: Partie): Frise | null {
     manches,
     miTemps,
     note: ecrits.join(SEP),
-    phrase: `Dernière partie${carte !== null ? `, ${carte}` : ""} : ${issue.join(", ")}${mi}.`,
+    phrase: `Dernière partie${carte !== null ? `, ${carte}` : ""} : ${issue.map(traduire).join(", ")}${mi}.`,
   }
 }
 
@@ -629,7 +631,7 @@ export function detailDePartie(p: Partie, rr: ReadonlyMap<string, LigneRr>, anne
     }
   }
   const r = rrDe(p, rr)
-  const enTete = [titreDit, r === null ? null : r.dit].filter((x): x is string => x !== null).join(", ")
+  const enTete = [titreDit, r === null ? null : r.dit].filter((x): x is string => x !== null).map(traduire).join(", ")
   // Sous-titre : carte, agent, date et heure, durée, groupe.
   for (const nom of [p.carte?.name ? p.carte.name : null, p.agent?.name ? p.agent.name : null]) {
     if (nom === null) continue
@@ -699,7 +701,7 @@ export function detailDePartie(p: Partie, rr: ReadonlyMap<string, LigneRr>, anne
     rr: r === null ? null : { texte: r.texte, ton: r.ton },
     enTete,
     sousTitre: ecrits.join(SEP),
-    sousTitreDit: dits.length === 0 ? "" : `${capitale(dits.join(", "))}.`,
+    sousTitreDit: dits.length === 0 ? "" : `${capitale(dits.map(traduire).join(", "))}.`,
     chiffres,
     equipe,
     rrDetail: rrDuDetail(p, rr),
@@ -969,10 +971,10 @@ function caseDeManche(m: Manche, i: number, type: TypeDeManche | null, kills: re
     lettre: type != null && Object.prototype.hasOwnProperty.call(LETTRES_ACHAT, type) ? LETTRES_ACHAT[type] : null,
     kills: n === 0 ? "" : n <= KILLS_EN_POINTS ? KILL.repeat(n) : `${nombreEnClair(n, 0)}${KILL}`,
     mort: siens.some(mortComptee),
-    etiquette: etiquette.join(SEP),
-    etiquetteDite: `${dite.join(", ")}.`,
-    recit: sansMauvaiseCoupure(recit.map((x) => x.ecrit).join(" ")),
-    recitDit: recit.map((x) => x.dit).join(" "),
+    etiquette: etiquette.map(traduire).join(SEP),
+    etiquetteDite: `${dite.map(traduire).join(", ")}.`,
+    recit: sansMauvaiseCoupure(recit.map((x) => traduire(x.ecrit)).join(" ")),
+    recitDit: recit.map((x) => traduire(x.dit)).join(" "),
   }
 }
 

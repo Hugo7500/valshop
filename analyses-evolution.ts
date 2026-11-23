@@ -23,6 +23,7 @@
 
 
 
+import { traduire } from "./langue"
 import type { Cote, Partie } from "./reduction"
 import {
   TIRET, effectifEnClair, libelleReference, nombreEnClair, palierMoyen, retenues,
@@ -443,5 +444,6 @@ function noteConditions(r: Omit<Conditions, "groupes" | "note" | "vide">, groupe
   if (tiret) morceaux.push(NOTE_TIRET)
   const rangSur = r.competition > 0 && r.competition !== r.completes ? ` ; rang du lobby sur ${compte(r.competition, "partie")} de compétition` : ""
   morceaux.push(`Sur ${compte(r.completes, "partie")}${rangSur}.`)
-  return morceaux.join(" ")
+  // En anglais, chaque phrase traduite seule (anglais.ts) ; en français, telle quelle.
+  return morceaux.map(traduire).join(" ")
 }

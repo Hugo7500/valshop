@@ -1,3 +1,4 @@
+import { traduire } from "./langue"
 import {
   EnvironmentValuesReader, HStack, Text, VStack, type Color, type DynamicTypeSize, type VirtualNode,
 } from "scripting"
@@ -322,8 +323,9 @@ function BlocFiche({ fiche }: { fiche: FicheCarte }) {
                   foregroundColor: c.texteDiscret,
                   monospacedDigit: true,
                   content: [
-                    { content: fiche.texteVictoires, font: TYPO.petitFort.font, fontWeight: TYPO.petitFort.fontWeight, foregroundColor: c.texte, monospacedDigit: true },
-                    suite,
+                    // Texte riche : ses morceaux ne passent pas par la fabrique JSX, traduits ici (en français, tels quels).
+                    { content: traduire(fiche.texteVictoires), font: TYPO.petitFort.font, fontWeight: TYPO.petitFort.fontWeight, foregroundColor: c.texte, monospacedDigit: true },
+                    traduire(suite),
                   ],
                 }}
                 accessibilityElement

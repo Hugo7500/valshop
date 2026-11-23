@@ -8,7 +8,7 @@ import {
   type Palette,
 } from "./design"
 import { SelecteurSegmente } from "./dessin"
-import { garderPreferences, preferencesGardees, type Ouverture } from "./preferences"
+import { garderPreferences, preferencesGardees, type LangueChoisie, type Ouverture } from "./preferences"
 import { ecrireReglage, lireReglageGarde } from "./widgets-fichier"
 import { PHRASES_ILE, type EtatIle } from "./widgets-ile"
 import { arreterIle, assurerIle } from "./widgets-ile-app"
@@ -28,7 +28,11 @@ import {
   phraseMiseAJour, type NouvelleVersion,
 } from "./mise-a-jour"
 import { lireEtatPrix, lignesPrixCatalogue } from "./prix-retenus"
-import { ETAT_PRIX_FILE } from "./valshop"
+import { ETAT_PRIX_FILE, lectureEnCours } from "./valshop"
+import { CONFIRMATION_DECONNEXION } from "./vue"
+import {
+  ADRESSE_SIGNALEMENT, BOUTON_SIGNALEMENT, NOTE_SIGNALEMENT, TITRE_SIGNALEMENT, lienSignalement, refusSignalement,
+} from "./signalement"
 import { MesWidgets } from "./mes-widgets"
 
 // Feuille « Réglages des stats » (DESIGN.md, feuille-reglages ; EXPERIENCE.md, Component
@@ -308,20 +312,119 @@ function SectionCle({ c, refusee }: { c: Palette; refusee: boolean }) {
   )
 }
 
-/** Où changer de compte : dit dans le groupe « Ton compte » (les deux boutons restent en bas de l'onglet Boutique). */
-export const NOTE_COMPTE = "Pour changer de compte ou te déconnecter : tout en bas de l'onglet Boutique."
 
-/** Ticket 4.51 : section Ton compte : une phrase, le seul endroit où s'écrit le Riot ID. */
-function SectionCompte({ c, meta }: { c: Palette; meta: EtatEcran["meta"] }) {
+
+
+
+
+
+
+/** Ce que la feuille peut demander à l'app en la fermant (les choix de vue.tsx, ChoixVue). */
+export type ChoixCompte = "changer-de-compte" | "deconnexion"
+let fermetureApp: ((choix: ChoixCompte) => void) | null = null
+/** L'app inscrit sa fermeture avec un choix ; rend de quoi la retirer. */
+export function inscrireFermetureApp(f: (choix: ChoixCompte) => void): () => void {
+  fermetureApp = f
+  return () => { if (fermetureApp === f) fermetureApp = null }
+}
+/** Le temps laissé à la feuille pour se fermer avant que l'app se ferme à son tour. */
+export const DELAI_FERMETURE_MS = 450
+
+export const LECTURE_EN_COURS_COMPTE = "Une lecture de la boutique est en cours. Réessaie dans un instant."
+export const BOUTON_CHANGER = "Changer de compte"
+export const BOUTON_DECONNEXION = "Se déconnecter"
+
+/** Ticket 4.51 : section Ton compte : une phrase, le seul endroit où s'écrit le Riot ID ; puis les deux actions du compte. */
+function SectionCompte({ c, meta, onFermer }: { c: Palette; meta: EtatEcran["meta"]; onFermer: () => void }) {
+  const [confirmer, setConfirmer] = useState(false)
+  const [occupee, setOccupee] = useState(false)
+  const parti = useRef(false)
+  const partir = (choix: ChoixCompte) => {
+    if (parti.current) return
+    if (lectureEnCours()) {
+      setOccupee(true)
+      return
+    }
+    parti.current = true
+    onFermer()
+    setTimeout(() => { if (fermetureApp !== null) fermetureApp(choix) }, DELAI_FERMETURE_MS)
+  }
   return (
     <VStack alignment="leading" spacing={ESPACES.dansBloc}>
       { }
       <Text {...TYPO.corps} foregroundStyle={c.texteDoux}>
         {phraseCompte(meta)}
       </Text>
-      <Text {...TYPO.note} foregroundStyle={c.texteDiscret}>
-        {NOTE_COMPTE}
+      {confirmer ? (
+        <VStack
+          alignment="leading"
+          spacing={ESPACES.dansBloc}
+          padding={ESPACES.bloc}
+          frame={{ maxWidth: "infinity", alignment: "leading" }}
+          background={{ style: melange(c.rougeClair as string, c.surface as string, 0.14), shape: { type: "rect", cornerRadius: ARRONDIS.md } }}
+        >
+          <Text {...TYPO.corps} foregroundStyle={c.texte} accessibilityAddTraits="isHeader">
+            {CONFIRMATION_DECONNEXION.title}
+          </Text>
+          <Text {...TYPO.corps} foregroundStyle={c.texteDoux}>
+            {CONFIRMATION_DECONNEXION.message}
+          </Text>
+          <BoutonSecondaire libelle={CONFIRMATION_DECONNEXION.confirmLabel} destructif action={() => partir("deconnexion")} />
+          <BoutonSecondaire libelle={CONFIRMATION_DECONNEXION.cancelLabel} action={() => { setConfirmer(false); setOccupee(false) }} />
+        </VStack>
+      ) : (
+        <VStack alignment="leading" spacing={ESPACES.dansBloc}>
+          <BoutonSecondaire libelle={BOUTON_CHANGER} action={() => partir("changer-de-compte")} />
+          <BoutonSecondaire libelle={BOUTON_DECONNEXION} destructif action={() => { setOccupee(false); setConfirmer(true) }} />
+        </VStack>
+      )}
+      {occupee ? (
+        <Text {...TYPO.corps} foregroundStyle={c.orange}>
+          {LECTURE_EN_COURS_COMPTE}
+        </Text>
+      ) : null}
+    </VStack>
+  )
+}
+
+
+
+
+
+
+function SectionSignalement({ c }: { c: Palette }) {
+  const [refus, setRefus] = useState(false)
+  const ecrire = async () => {
+    setRefus(false)
+    let scripting: unknown = null, ios: unknown = null, appareil: unknown = null, langue: unknown = null, valshop: unknown = null
+    try { valshop = Script.metadata?.version } catch { /* illisible : omis */ }
+    try { scripting = Device.appVersion } catch { /* illisible : omis */ }
+    try { ios = Device.systemVersion } catch { /* illisible : omis */ }
+    try { appareil = Device.model } catch { /* illisible : omis */ }
+    try { langue = Device.systemLanguageCode } catch { /* illisible : omis */ }
+    const lien = lienSignalement({ valshop, scripting, ios, appareil, langue })
+    let ok = false
+    try {
+      ok = lien !== null && (await Safari.openURL(lien))
+    } catch {
+      ok = false
+    }
+    if (!ok) setRefus(true)
+  }
+  return (
+    <VStack alignment="leading" spacing={ESPACES.dansBloc}>
+      <Text {...policeCondensee(TYPO.etiquette)} foregroundStyle={c.texteDiscret} accessibilityAddTraits="isHeader">
+        {TITRE_SIGNALEMENT}
       </Text>
+      <BoutonSecondaire libelle={BOUTON_SIGNALEMENT} icone="envelope" action={ecrire} />
+      <Text {...TYPO.note} foregroundStyle={c.texteDiscret}>
+        {NOTE_SIGNALEMENT}
+      </Text>
+      {refus ? (
+        <Text {...TYPO.corps} foregroundStyle={c.orange}>
+          {refusSignalement()}
+        </Text>
+      ) : null}
     </VStack>
   )
 }
@@ -559,6 +662,39 @@ function SectionOuverture({ c }: { c: Palette }) {
   )
 }
 
+
+
+export const TITRE_LANGUE = "Langue"
+export const NOTE_LANGUE = "« Auto » suit la langue de ton iPhone. Le changement s'applique à la prochaine ouverture de ValShop."
+export const REFUS_LANGUE = "Réglage non gardé, réessaie."
+const SEGMENTS_LANGUE = [{ cle: "auto", libelle: "Auto" }, { cle: "fr", libelle: "Français" }, { cle: "en", libelle: "English" }] as const
+
+function SectionLangue({ c }: { c: Palette }) {
+  const [choix, setChoix] = useState<LangueChoisie>(() => preferencesGardees().langue)
+  const [refus, setRefus] = useState(false)
+  const choisir = (l: LangueChoisie) => {
+    const ok = garderPreferences({ langue: l })
+    setRefus(!ok)
+    if (ok) setChoix(l)
+  }
+  return (
+    <VStack alignment="leading" spacing={ESPACES.dansBloc}>
+      <Text {...policeCondensee(TYPO.etiquette)} foregroundStyle={c.texteDiscret} accessibilityAddTraits="isHeader">
+        {TITRE_LANGUE}
+      </Text>
+      <SelecteurSegmente segments={SEGMENTS_LANGUE} choisi={choix} onChoix={choisir} />
+      {refus ? (
+        <Text {...TYPO.corps} foregroundStyle={c.orange}>
+          {REFUS_LANGUE}
+        </Text>
+      ) : null}
+      <Text {...TYPO.note} foregroundStyle={c.texteDiscret}>
+        {NOTE_LANGUE}
+      </Text>
+    </VStack>
+  )
+}
+
 export const TITRE_ILE = "Île dynamique"
 export const LIBELLE_ILE = "Quand un souhait est en boutique"
 export const NOTE_ILE = "L'étoile et le compte à rebours du reset dans l'île dynamique. Elle se lance quand ValShop lit ta boutique, app ouverte."
@@ -701,7 +837,7 @@ export function FeuilleReglages({ onFermer, refusee = false, ecran, maintenant, 
                 </Groupe>
               ) : null}
               <Groupe c={c} titre={GROUPES.compte}>
-                <SectionCompte c={c} meta={ecran.meta} />
+                <SectionCompte c={c} meta={ecran.meta} onFermer={onFermer} />
               </Groupe>
               {/* « Stats » juste sous le compte : la Clé HenrikDev reste près du haut de la feuille, qui s'ouvre à mi-hauteur
                   (« Coller ma clé » du premier lancement l'ouvre pour ce champ et son message de refus). */}
@@ -714,12 +850,15 @@ export function FeuilleReglages({ onFermer, refusee = false, ecran, maintenant, 
                 <SectionWidgets c={c} onOuvrir={ouvrirWidgets} />
                 <SectionIle c={c} />
                 <SectionOuverture c={c} />
+                <SectionLangue c={c} />
               </Groupe>
               <Groupe c={c} titre={GROUPES.boutique}>
                 <SectionPrixCatalogue c={c} />
               </Groupe>
               <Groupe c={c} titre={GROUPES.valshop}>
                 <SectionPartage c={c} />
+                { }
+                {ADRESSE_SIGNALEMENT !== "" ? <SectionSignalement c={c} /> : null}
                 <SectionAPropos c={c} />
               </Groupe>
             </VStack>

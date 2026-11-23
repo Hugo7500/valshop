@@ -17,6 +17,7 @@
 //     événement, « Skin de base »), dans le style discret du « non communiqué » ; filtre « Obtention ».
 // Module pur : aucun import de « scripting », aucune lecture de fichier ; il tourne sous `node --test` (tests/resoudre-ts.ts).
 
+import { langue, traduire } from "./langue"
 import { separerNom } from "./fiches"
 import { catalogueAncien, normaliser } from "./souhaits"
 import { CSP_CATALOGUE, imageAdmise as imageDistanteAdmise, metaCsp } from "./securite"
@@ -621,6 +622,9 @@ export function imageAdmise(adresse: string | null): adresse is string {
   return imageDistanteAdmise(adresse)
 }
 
+/** Ce que VoiceOver lit après un skin souhaité (le script de la page l'ajoute et le retire). */
+const SOUHAIT_DIT = ", dans tes souhaits"
+
 /** Nom de l'écouteur de la page dans l'app (window.webkit.messageHandlers). */
 export const PONT_CATALOGUE = "valshopCatalogue"
 
@@ -766,14 +770,17 @@ export function pageCatalogue(index: IndexCatalogue, { prix, boutique = null, re
   const editions = new Map(index.editions.map((e) => [e.id, e]))
   const nomsCollections = new Map(index.collections.map((c) => [c.cle, c.nom]))
   const etoilees = new Set(niveauxSouhaites(index, souhaits))
+  const souhaitDit = traduire(SOUHAIT_DIT)
   const obtentions = new Set<string>()
   const sections: string[] = []
   let courante: string | null = null
   let lignes: string[] = []
+  // En anglais, chaque texte de la page traduit avant d'être échappé (anglais.ts) ; en français, tel quel, la page identique.
+  const tr = (x: string) => echapper(traduire(x))
   const fermer = () => {
     if (courante === null) return
     const nom = index.armes.find((a) => a.id === courante)?.nom ?? courante
-    sections.push(`<section data-arme="${echapper(courante)}"><h2>${echapper(nom)}</h2><ul>${lignes.join("")}</ul></section>`)
+    sections.push(`<section data-arme="${echapper(courante)}"><h2>${tr(nom)}</h2><ul>${lignes.join("")}</ul></section>`)
   }
   for (const s of index.skins) {
     if (s.arme !== courante) { fermer(); courante = s.arme; lignes = [] }
@@ -790,50 +797,54 @@ export function pageCatalogue(index: IndexCatalogue, { prix, boutique = null, re
     const collection = s.collection !== null ? nomsCollections.get(s.collection) ?? null : null
     // La collection n'est redite sous le titre que si elle en diffère (« Glitchpop » sous « Glitchpop » : rien).
     const autreCollection = collection !== null && normaliser(collection) !== normaliser(s.titre) ? collection : null
-    const sous = [e ? e.nom : null, autreCollection].filter((x): x is string => x !== null).join(" · ")
-    const marque = ou === "jour" ? "Boutique du jour" : ou === "nm" ? "Night Market" : null
+    const sous = [e ? traduire(e.nom) : null, autreCollection].filter((x): x is string => x !== null).join(" · ")
+    const marque = ou === "jour" ? traduire("Boutique du jour") : ou === "nm" ? "Night Market" : null
     // VoiceOver : titre, arme (le titre de section n'est pas relu ligne à ligne), édition, prix, boutique, souhait (le script
     // ajoute ou retire « , dans tes souhaits »).
     const lu = [s.titre, s.armeNom, e ? e.nom : null, voixPrix, marque ? (ou === "jour" ? "dans la boutique du jour" : "au Night Market") : null]
-      .filter((x): x is string => x !== null).join(", ") + (souhaite ? ", dans tes souhaits" : "")
+      .filter((x): x is string => x !== null).map(traduire).join(", ") + (souhaite ? souhaitDit : "")
     const image = imageAdmise(s.icone) ? `<img loading="lazy" src="${echapper(s.icone)}" alt="" width="68" height="30">` : `<span class="sans"></span>`
     const pastille = e && e.couleur && /^#[0-9a-fA-F]{6}$/.test(e.couleur) ? `<i style="background:${e.couleur}"></i>` : ""
     // Ticket 8.6 : sans prix validé (skin absent de prix.json, ou aucun prix.json) : « Prix non communiqué par Riot », discret.
     // Ticket 8.7 : au Night Market, la forme de la Boutique (vue.tsx, PrixRemise) : base barrée, prix remisé, puis « −N % ».
-    const affiche = p.vp === null ? `<b class="h">${echapper(ditPrix)}</b>`
-      : p.base === null && p.remise === null ? `<b>${echapper(p.texte)}</b>`
-      : `<span class="pn">${p.base !== null ? `<s>${p.base}</s>` : ""}<b>${echapper(p.texte)}</b></span>${p.remise !== null ? `<span class="r">−${p.remise} %</span>` : ""}`
+    const affiche = p.vp === null ? `<b class="h">${tr(ditPrix)}</b>`
+      : p.base === null && p.remise === null ? `<b>${tr(p.texte)}</b>`
+      : `<span class="pn">${p.base !== null ? `<s>${p.base}</s>` : ""}<b>${tr(p.texte)}</b></span>${p.remise !== null ? `<span class="r">${traduire(`−${p.remise} %`)}</span>` : ""}`
     lignes.push(`<li><button class="l" data-action="skin" data-valeur="${echapper(s.niveau)}"`
       + ` data-p="${s.edition !== null ? codeEdition.get(s.edition) ?? "" : ""}" data-c="${s.collection !== null ? codeCollection.get(s.collection) ?? "" : ""}" data-o="${codes}"`
       + ` data-n="${echapper(normaliser(`${s.titre} ${s.armeNom} ${collection ?? ""}`))}"${souhaite ? " data-souhait" : ""} aria-label="${echapper(lu)}">${image}`
-      + `<span class="t"><span class="n">${echapper(s.titre)}</span><span class="s">${pastille}${echapper(sous || s.armeNom)}</span></span>`
+      + `<span class="t"><span class="n">${echapper(s.titre)}</span><span class="s">${pastille}${echapper(sous || traduire(s.armeNom))}</span></span>`
       + `<span class="d">${affiche}${marque ? `<span class="s m">${marque}</span>` : ""}<span class="e" aria-hidden="true">★</span></span></button></li>`)
   }
   fermer()
-  const puces = [`<button class="puce" type="button" data-arme="" aria-pressed="true">Toutes</button>`,
-    ...index.armes.map((a) => `<button class="puce" type="button" data-arme="${echapper(a.id)}" aria-pressed="false">${echapper(a.nom)}</button>`)].join("")
-  const choixEditions = index.editions.length === 0 ? "" : `<select id="ed" aria-label="Édition"><option value="">Toutes les éditions</option>`
-    + index.editions.map((e, i) => `<option value="e${i}">${echapper(e.nom)}</option>`).join("") + `</select>`
-  const choixCollections = index.collections.length === 0 ? "" : `<select id="col" aria-label="Collection"><option value="">Toutes les collections</option>`
+  const puces = [`<button class="puce" type="button" data-arme="" aria-pressed="true">${tr("Toutes")}</button>`,
+    ...index.armes.map((a) => `<button class="puce" type="button" data-arme="${echapper(a.id)}" aria-pressed="false">${tr(a.nom)}</button>`)].join("")
+  const choixEditions = index.editions.length === 0 ? "" : `<select id="ed" aria-label="${tr("Édition")}"><option value="">${tr("Toutes les éditions")}</option>`
+    + index.editions.map((e, i) => `<option value="e${i}">${tr(e.nom)}</option>`).join("") + `</select>`
+  const choixCollections = index.collections.length === 0 ? "" : `<select id="col" aria-label="${tr("Collection")}"><option value="">${tr("Toutes les collections")}</option>`
     + index.collections.map((c, i) => `<option value="c${i}">${echapper(c.nom)}</option>`).join("") + `</select>`
   // Ticket 8.11 : le choix « Obtention » (catalogue complet seulement, comme les éditions et collections).
   const choixOrigines = index.complet ? choixObtention(obtentions) : ""
   const notes = [
     index.complet ? null : "Éditions et collections après la prochaine lecture de la boutique.",
-  ].filter((x): x is string => x !== null).map((t) => `<p class="note">${echapper(t)}</p>`).join("")
-  const script = SCRIPT.replace("__PONT__", JSON.stringify(PONT_CATALOGUE)).replace("__JETON__", String(Math.trunc(jeton)))
+  ].filter((x): x is string => x !== null).map((t) => `<p class="note">${tr(t)}</p>`).join("")
+  let script = SCRIPT.replace("__PONT__", JSON.stringify(PONT_CATALOGUE)).replace("__JETON__", String(Math.trunc(jeton)))
+  // En anglais, la mention du souhait que le script ajoute et retire, traduite (en français, le script tel quel).
+  if (souhaitDit !== SOUHAIT_DIT) {
+    script = script.replace(`/${SOUHAIT_DIT}$/`, `/${souhaitDit.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}$/`).replace(`lu + "${SOUHAIT_DIT}"`, `lu + ${JSON.stringify(souhaitDit)}`)
+  }
   // Ticket 7.8 (M2) : la politique de contenu du Catalogue (securite.ts, CSP_CATALOGUE) en tête, avant le style et le script.
   // Ticket 8.8 : le fond et `color-scheme` en ligne sur <html> et <body>, dès le premier octet, avant toute feuille de style
   // (comme le document de Stats, page-web.tsx, documentHote).
   const fond = couleurs.fond
-  return `<!doctype html><html lang="fr" style="background-color:${fond};color-scheme:dark"><head><meta charset="utf-8">${metaCsp(CSP_CATALOGUE)}`
+  return `<!doctype html><html lang="${langue()}" style="background-color:${fond};color-scheme:dark"><head><meta charset="utf-8">${metaCsp(CSP_CATALOGUE)}`
     + `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark">`
     + `<style>${css(couleurs)}</style></head><body style="background-color:${fond}">`
-    + `<header class="tete"><input id="q" type="search" placeholder="Rechercher un skin" aria-label="Rechercher un skin" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">`
-    + `<div class="puces" role="group" aria-label="Arme">${puces}</div>`
+    + `<header class="tete"><input id="q" type="search" placeholder="${tr("Rechercher un skin")}" aria-label="${tr("Rechercher un skin")}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">`
+    + `<div class="puces" role="group" aria-label="${tr("Arme")}">${puces}</div>`
     + (choixEditions || choixCollections ? `<div class="choix">${choixEditions}${choixCollections}</div>` : "")
     + (choixOrigines ? `<div class="choix">${choixOrigines}</div>` : "")
     + `<p id="compte" aria-live="polite">${index.skins.length} skins</p>${notes}</header>`
-    + `<main>${sections.join("")}<p id="vide" hidden>Aucun skin ne correspond.</p></main>`
+    + `<main>${sections.join("")}<p id="vide" hidden>${tr("Aucun skin ne correspond.")}</p></main>`
     + `<script>${script}</script></body></html>`
 }

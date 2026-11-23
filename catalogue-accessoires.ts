@@ -13,6 +13,7 @@
 //     événement) à la place du prix, et sa sortie dans la fiche si une source exacte la donne ; filtre « Obtention ».
 // Module pur : aucun import de « scripting », aucune lecture de fichier ; il tourne sous `node --test`.
 
+import { langue, traduire } from "./langue"
 import { PRIX_NON_COMMUNIQUE } from "./catalogue-skins"
 import { normaliser } from "./souhaits"
 import { CSP_CATALOGUE, imageAdmise, metaCsp } from "./securite"
@@ -473,7 +474,19 @@ export type LigneAccessoire = { a: Accessoire; prix: PrixAccessoire; enBoutique:
  * fiche dans la page ; VoiceOver lit son texte : titre, type, prix et la boutique. Rien d'externe sauf les images (media.valorant-api.com,
  * paresseuses).
  */
+/** En anglais, les textes que le script de la page écrit lui-même, remplacés par leur traduction ; en français, le script tel quel. */
+function scriptTraduit(script: string, textes: readonly string[]): string {
+  let s = script
+  for (const x of textes) {
+    const t = traduire(x)
+    if (t !== x) s = s.split(JSON.stringify(x)).join(JSON.stringify(t))
+  }
+  return s
+}
+
 export function pageAccessoires(lignes: readonly LigneAccessoire[], { couleurs, jeton, boutiqueConnue = true }: { couleurs: CouleursPage; jeton: number; boutiqueConnue?: boolean }): string {
+  // En anglais, chaque texte de la page traduit avant d'être échappé (anglais.ts) ; en français, tel quel, la page identique.
+  const tr = (x: string) => echapper(traduire(x))
   const parType = new Map<TypeAccessoire, string[]>()
   const obtentions = new Set<string>()
   let enBoutique = 0
@@ -483,61 +496,62 @@ export function pageAccessoires(lignes: readonly LigneAccessoire[], { couleurs, 
     const codes = codesObtention(prix.montant !== null, origine)
     for (const x of codes.split(" ")) obtentions.add(x)
     if (e) enBoutique++
-    const libelle = LIBELLES[a.type].un
-    const vignette = a.icone !== null ? `<img loading="lazy" src="${echapper(a.icone)}" alt="" width="44" height="44">` : `<span class="sans" aria-hidden="true">${a.type === "title" ? "Titre" : ""}</span>`
+    const libelle = traduire(LIBELLES[a.type].un)
+    const vignette = a.icone !== null ? `<img loading="lazy" src="${echapper(a.icone)}" alt="" width="44" height="44">` : `<span class="sans" aria-hidden="true">${a.type === "title" ? tr("Titre") : ""}</span>`
 
 
-    const affiche = prix.montant === null ? `<b class="h">${echapper(origine !== null ? origine.texte : prix.texte)}</b>`
-      : prix.voix !== prix.texte ? `<b><span aria-hidden="true">${echapper(prix.texte)}</span><span class="vh">${echapper(prix.voix)}</span></b>` : `<b>${echapper(prix.texte)}</b>`
+    const affiche = prix.montant === null ? `<b class="h">${tr(origine !== null ? origine.texte : prix.texte)}</b>`
+      : prix.voix !== prix.texte ? `<b><span aria-hidden="true">${tr(prix.texte)}</span><span class="vh">${tr(prix.voix)}</span></b>` : `<b>${tr(prix.texte)}</b>`
 
 
     const attributs = [
       `data-action="fiche"`, `data-n="${echapper(normaliser(`${a.nom} ${a.texte ?? ""}`))}"`,
-      prix.montant !== null ? `data-prix="${echapper(prix.texte)}"` : "", prix.montant !== null && prix.voix !== prix.texte ? `data-v="${echapper(prix.voix)}"` : "", prix.source !== null ? `data-src="${echapper(prix.source)}"` : "",
+      prix.montant !== null ? `data-prix="${tr(prix.texte)}"` : "", prix.montant !== null && prix.voix !== prix.texte ? `data-v="${tr(prix.voix)}"` : "", prix.source !== null ? `data-src="${tr(prix.source)}"` : "",
       a.image !== null && a.image !== a.icone ? `data-i="${echapper(voisine(a.icone, a.image))}"` : "",
       a.animation !== null ? `data-a="${echapper(voisine(a.icone, a.animation))}"` : "",
       a.texte !== null ? `data-t="${echapper(a.texte)}"` : "", e ? "data-e" : "",
       // Ticket 8.11 : codes d'obtention (filtre) ; l'origine n'est redite en attribut que si la ligne montre un prix (sinon la
       // fiche la lit dans la ligne) ; la sortie, si elle est connue.
       `data-o="${codes}"`,
-      origine !== null && prix.montant !== null ? `data-or="${echapper(origine.texte)}"` : "",
-      origine !== null && origine.sortie !== null ? `data-so="${echapper(origine.sortie)}"` : "",
+      origine !== null && prix.montant !== null ? `data-or="${tr(origine.texte)}"` : "",
+      origine !== null && origine.sortie !== null ? `data-so="${tr(origine.sortie)}"` : "",
     ].filter((x) => x !== "").join(" ")
     // Ticket 8.11 : un tag animé le dit dans la liste (son animation joue dans sa fiche : trop lourde pour la liste).
-    const sous = a.type === "title" && a.texte !== null && a.texte !== a.titre ? `« ${a.texte} »` : a.animation !== null ? "Tag animé" : libelle
+    const sous = a.type === "title" && a.texte !== null && a.texte !== a.titre ? `« ${a.texte} »` : a.animation !== null ? traduire("Tag animé") : libelle
     const l = parType.get(a.type) ?? []
     // VoiceOver lit le bouton dans l'ordre de son texte : titre, type, prix, puis « Dans ta boutique » s'il y est.
     l.push(`<li><button class="l" ${attributs}>${vignette}<span class="t"><span class="n">${echapper(a.titre)}</span>`
-      + `<span class="s">${echapper(sous)}</span></span><span class="d">${affiche}${e ? `<span class="s m">Dans ta boutique</span>` : ""}</span></button></li>`)
+      + `<span class="s">${echapper(sous)}</span></span><span class="d">${affiche}${e ? `<span class="s m">${tr("Dans ta boutique")}</span>` : ""}</span></button></li>`)
     parType.set(a.type, l)
   }
   const sections = TYPES_ACCESSOIRES.filter((t) => parType.has(t))
-    .map((t) => `<section data-type="${t}"><h2>${echapper(LIBELLES[t].section)}</h2><ul>${parType.get(t)!.join("")}</ul></section>`).join("")
-  const puces = [`<button class="puce" type="button" data-type="" aria-pressed="true">Tous</button>`,
-    ...TYPES_ACCESSOIRES.filter((t) => parType.has(t)).map((t) => `<button class="puce" type="button" data-type="${t}" aria-pressed="false">${echapper(LIBELLES[t].section)}</button>`),
-    ...(enBoutique > 0 ? [`<button class="puce" type="button" data-type="boutique" aria-pressed="false">Dans ta boutique</button>`] : [])].join("")
+    .map((t) => `<section data-type="${t}"><h2>${tr(LIBELLES[t].section)}</h2><ul>${parType.get(t)!.join("")}</ul></section>`).join("")
+  const puces = [`<button class="puce" type="button" data-type="" aria-pressed="true">${tr("Tous")}</button>`,
+    ...TYPES_ACCESSOIRES.filter((t) => parType.has(t)).map((t) => `<button class="puce" type="button" data-type="${t}" aria-pressed="false">${tr(LIBELLES[t].section)}</button>`),
+    ...(enBoutique > 0 ? [`<button class="puce" type="button" data-type="boutique" aria-pressed="false">${tr("Dans ta boutique")}</button>`] : [])].join("")
   const choixOrigines = avecOrigines ? choixObtention(obtentions) : ""
-  const types = Object.fromEntries(TYPES_ACCESSOIRES.map((t) => [t, LIBELLES[t].un]))
+  const types = Object.fromEntries(TYPES_ACCESSOIRES.map((t) => [t, traduire(LIBELLES[t].un)]))
   // Ticket 8.11 : __RIEN__ paraît deux fois dans le script ; remplacé une seule fois (8.10), la fiche d'un accessoire sans prix
   // levait « Can't find variable: __RIEN__ » et ne s'ouvrait pas (vu dans WebKit) : chaque occurrence remplacée.
-  const script = SCRIPT.replace("__PONT__", JSON.stringify(PONT_ACCESSOIRES)).replace("__JETON__", String(Math.trunc(jeton)))
-    .replace("__TYPES__", JSON.stringify(types).replace(/</g, "\\u003c")).replace(/__RIEN__/g, JSON.stringify(PRIX_NON_COMMUNIQUE)).replace("__CONNUE__", boutiqueConnue ? "true" : "false")
+  const script = scriptTraduit(SCRIPT, [" accessoires", " accessoire", "Inconnue (boutique d'accessoires d'une semaine passée)", "Oui", "Non", "Animation du tag"])
+    .replace("__PONT__", JSON.stringify(PONT_ACCESSOIRES)).replace("__JETON__", String(Math.trunc(jeton)))
+    .replace("__TYPES__", JSON.stringify(types).replace(/</g, "\\u003c")).replace(/__RIEN__/g, JSON.stringify(traduire(PRIX_NON_COMMUNIQUE))).replace("__CONNUE__", boutiqueConnue ? "true" : "false")
   const fond = couleurs.fond
   const n = lignes.length
   // Ticket 8.8 : le fond et `color-scheme` en ligne sur <html> et <body>, avant toute feuille de style ; ticket 7.8 : la CSP en tête.
-  return `<!doctype html><html lang="fr" style="background-color:${fond};color-scheme:dark"><head><meta charset="utf-8">${metaCsp(CSP_CATALOGUE)}`
+  return `<!doctype html><html lang="${langue()}" style="background-color:${fond};color-scheme:dark"><head><meta charset="utf-8">${metaCsp(CSP_CATALOGUE)}`
     + `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark">`
     + `<style>${css(couleurs)}</style></head><body style="background-color:${fond}">`
-    + `<div id="liste"><header class="tete"><input id="q" type="search" placeholder="Rechercher un accessoire" aria-label="Rechercher un accessoire" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">`
-    + `<div class="puces" role="group" aria-label="Type">${puces}</div>`
+    + `<div id="liste"><header class="tete"><input id="q" type="search" placeholder="${tr("Rechercher un accessoire")}" aria-label="${tr("Rechercher un accessoire")}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">`
+    + `<div class="puces" role="group" aria-label="${tr("Type")}">${puces}</div>`
     + (choixOrigines ? `<div class="choix">${choixOrigines}</div>` : "")
-    + `<p id="compte" aria-live="polite">${n} ${n > 1 ? "accessoires" : "accessoire"}</p></header>`
-    + `<main>${sections}<p id="vide" hidden>Aucun accessoire ne correspond.</p></main></div>`
-    + `<div id="fiche" role="dialog" aria-modal="true" aria-labelledby="f-nom" hidden><button id="retour" type="button">‹ Tous les accessoires</button>`
+    + `<p id="compte" aria-live="polite">${tr(`${n} ${n > 1 ? "accessoires" : "accessoire"}`)}</p></header>`
+    + `<main>${sections}<p id="vide" hidden>${tr("Aucun accessoire ne correspond.")}</p></main></div>`
+    + `<div id="fiche" role="dialog" aria-modal="true" aria-labelledby="f-nom" hidden><button id="retour" type="button">${tr("‹ Tous les accessoires")}</button>`
     + `<div class="visuel"><img id="f-img" alt="" hidden><div id="f-titre" hidden></div></div>`
     + `<h1 id="f-nom" tabindex="-1"></h1><p id="f-type" class="p"></p><p id="f-anim" class="p" hidden></p>`
-    + `<dl><div id="f-prix-l"><dt>Prix</dt><dd><span id="f-prix" aria-hidden="true"></span><span id="f-prix-v" class="vh"></span></dd></div><div id="f-source-l"><dt>Source du prix</dt><dd id="f-source"></dd></div>`
-    + `<div id="f-or-l" hidden><dt>Origine</dt><dd id="f-or"></dd></div><div id="f-so-l" hidden><dt>Sortie</dt><dd id="f-so"></dd></div>`
-    + `<div><dt>Dans ta boutique d'accessoires</dt><dd id="f-boutique"></dd></div></dl></div>`
+    + `<dl><div id="f-prix-l"><dt>${tr("Prix")}</dt><dd><span id="f-prix" aria-hidden="true"></span><span id="f-prix-v" class="vh"></span></dd></div><div id="f-source-l"><dt>${tr("Source du prix")}</dt><dd id="f-source"></dd></div>`
+    + `<div id="f-or-l" hidden><dt>${tr("Origine")}</dt><dd id="f-or"></dd></div><div id="f-so-l" hidden><dt>${tr("Sortie")}</dt><dd id="f-so"></dd></div>`
+    + `<div><dt>${tr("Dans ta boutique d'accessoires")}</dt><dd id="f-boutique"></dd></div></dl></div>`
     + `<script>${script}</script></body></html>`
 }

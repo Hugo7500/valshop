@@ -1,3 +1,4 @@
+import { traduire } from "./langue"
 import {
   EnvironmentValuesReader, HStack, PathShape, Text, VStack, ZStack,
   type Color, type DynamicTypeSize, type Path2D, type Size, type VirtualNode,
@@ -329,7 +330,7 @@ export function GrilleChiffresCles({ tuiles, ouvrir }: { tuiles: readonly Tuile[
                   if (!ouvrir) return <TuileChiffreCle key={t.cle} tuile={t} rangee={r} />
                   const o = ouverture(DESTINATIONS_TUILES[t.cle], ouvrir)
                   return zoneDAppui(
-                    { cle: t.cle, action: o.action, voix: `${phraseTuile(t)} ${o.dit}`, indice: INDICES[t.cle], cadre: CASE_TUILE },
+                    { cle: t.cle, action: o.action, voix: `${traduire(phraseTuile(t))} ${traduire(o.dit)}`, indice: INDICES[t.cle], cadre: CASE_TUILE },
                     <TuileChiffreCle tuile={t} rangee={r} />,
                   )
                 })}
@@ -562,7 +563,8 @@ export function derniereJauge(n: NiveauReel): { texte: string; evaluation: Evalu
 /** Ticket 4.52 : la phrase VoiceOver de Ton niveau réel, tes boucliers de rang dits à la fin quand l'écran les montre. */
 export function phraseNiveauAffichee(n: NiveauReel): string {
   const b = bouclierDit(n.boucliers ?? null)
-  return b === null ? n.phrase : `${n.phrase} ${b[0].toUpperCase()}${b.slice(1)}.`
+  // En anglais, chaque phrase traduite seule (anglais.ts) ; en français, telle quelle.
+  return b === null ? n.phrase : `${traduire(n.phrase)} ${traduire(`${b[0].toUpperCase()}${b.slice(1)}.`)}`
 }
 
 
@@ -922,11 +924,12 @@ export function barresCotes(cotes: CotesAffichees): Barre[] {
 
 
 export function phraseCotes(c: Palette, cotes: CotesAffichees): (string | StyledText)[] {
-  const morceaux: (string | StyledText)[] = [PHRASE_COTES]
+  // Texte riche : ses morceaux ne passent pas par la fabrique JSX, traduits ici (en français, tels quels).
+  const morceaux: (string | StyledText)[] = [traduire(PHRASE_COTES)]
   const avecEcart = ([["Attaque", cotes.attaque], ["Défense", cotes.defense]] as const).filter(([, x]) => x.ecart !== null)
   avecEcart.forEach(([libelle, x], i) => {
-    morceaux.push(`${i === 0 ? ` ${libelle}` : `${INSECABLE}; ${libelle.toLowerCase()}`}${INSECABLE}: `)
-    morceaux.push({ content: x.ecart ?? "", font: TYPO.corps.font, fontWeight: TYPO.corps.fontWeight, foregroundColor: couleurEvaluation(c, x.evaluation) })
+    morceaux.push(traduire(`${i === 0 ? ` ${libelle}` : `${INSECABLE}; ${libelle.toLowerCase()}`}${INSECABLE}: `))
+    morceaux.push({ content: traduire(x.ecart ?? ""), font: TYPO.corps.font, fontWeight: TYPO.corps.fontWeight, foregroundColor: couleurEvaluation(c, x.evaluation) })
   })
   if (avecEcart.length > 0) morceaux.push(".")
   return morceaux
@@ -1038,7 +1041,8 @@ export function ouverture(d: Destination, ouvrir: PropsEmplacement["ouvrir"]): O
  * phrase absente omise.
  */
 export function voixBloc(titre: string, phrases: readonly (string | null)[], d: Destination): string {
-  return [`${titre}.`, ...phrases.filter((p): p is string => p !== null && p !== ""), ouvreDit(d.cle)].join(" ")
+  // En anglais, chaque phrase traduite seule (anglais.ts) ; en français, telle quelle.
+  return [`${titre}.`, ...phrases.filter((p): p is string => p !== null && p !== ""), ouvreDit(d.cle)].map(traduire).join(" ")
 }
 
 

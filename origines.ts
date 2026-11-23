@@ -13,6 +13,7 @@
 
 
 
+import { traduire } from "./langue"
 import { dateEnClair } from "./prix-retenus"
 
 function estObjet(x: unknown): x is Record<string, unknown> {
@@ -275,6 +276,7 @@ export function codesObtention(aPrix: boolean, p: Provenance | null): string {
 export function choixObtention(presents: ReadonlySet<string>): string {
   const options = OBTENTIONS.filter((o) => presents.has(o.code))
   if (options.length < 2) return ""
-  return `<select id="ob" aria-label="Obtention"><option value="">Toutes les obtentions</option>`
-    + options.map((o) => `<option value="${o.code}">${o.nom.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</option>`).join("") + `</select>`
+  // En anglais, chaque texte traduit avant d'être échappé (anglais.ts) ; en français, tel quel.
+  return `<select id="ob" aria-label="${traduire("Obtention")}"><option value="">${traduire("Toutes les obtentions")}</option>`
+    + options.map((o) => `<option value="${o.code}">${traduire(o.nom).replace(/&/g, "&amp;").replace(/</g, "&lt;")}</option>`).join("") + `</select>`
 }

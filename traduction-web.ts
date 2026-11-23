@@ -1,4 +1,5 @@
 import type { VueWeb } from "./rendu"
+import { locale } from "./langue"
 
 // Ticket 4.50 de epic-stats-tableau-de-bord (Stats dessiné par une vue web), phase A : la traduction de l'arbre rendu par le
 // moteur web (rendu.ts : les mêmes composants, les mêmes calculs) en HTML, CSS et SVG, pour une seule vue native `WebView`
@@ -233,8 +234,8 @@ export function dateCompacte(valeur: unknown, composants?: string[]): string {
   const d = new Date(typeof valeur === "number" || typeof valeur === "string" || valeur instanceof Date ? (valeur as any) : NaN)
   if (isNaN(d.getTime())) return ""
   const c = composants && composants.length ? composants : ["hourAndMinute", "date"]
-  const jour = c.includes("date") ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : ""
-  const heure = c.includes("hourAndMinute") ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : ""
+  const jour = c.includes("date") ? d.toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" }) : ""
+  const heure = c.includes("hourAndMinute") ? d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }) : ""
   return [jour, heure].filter((x) => x).join(", ")
 }
 

@@ -3,6 +3,8 @@ import { changerDeCompte, finirLectures, nettoyerCookiesPersistants, refresh, se
 import { INTERRUPTEURS, lireOuverture, presenterApp, type LectureOuverture } from "./app"
 import { aUneCle } from "./cle"
 import type { ChoixVue } from "./vue"
+import { installerTraduction, langueDe } from "./langue"
+import { preferencesGardees } from "./preferences"
 
 // Point d'entrée au premier plan. Tout lancement présente l'app à deux onglets, sur Stats
 // (Boutique en cache, d'où l'on peut changer de compte ; l'Écran de connexion tant que la
@@ -15,6 +17,11 @@ import type { ChoixVue } from "./vue"
 // une clé rangée : la fin du journal va aussi à la console, l'app fermée.
 
 async function run() {
+
+  try {
+    const l = langueDe(preferencesGardees().langue, Device.systemLanguageCode)
+    if (l === "en") await installerTraduction(l)
+  } catch { /* l'app reste en français */ }
   // Aiguillage : `ouvrir` est le seul paramètre lu ici. `vue` (appui sur le widget)
   // présente l'app en plein écran, sans mise à jour au premier plan : sur Stats, ou sur
   // l'Écran de connexion si etat.json dit la session expirée. `connexion` (appui sur le

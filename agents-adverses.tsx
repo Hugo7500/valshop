@@ -1,3 +1,4 @@
+import { traduire } from "./langue"
 import { EnvironmentValuesReader, Rectangle, Text, type VirtualNode } from "scripting"
 import { createElement, Fragment } from "./rendu" // ticket 4.50 : JSX et crochets par le module intermédiaire
 import { TYPO, couleurs, policeCondensee } from "./design"
@@ -123,7 +124,8 @@ export function SectionAgentsDeLaPartie({ partie }: { partie: Partie }) {
     return null
   }
   if (r.etat === "sansManches") return null
-  const note = sansMauvaiseCoupure(`${NOTE_PARTIE} ${NOTE_DELAI} ${NOTE_AGENTS}`)
+  // En anglais, chaque phrase traduite seule (anglais.ts) ; en français, telle quelle.
+  const note = sansMauvaiseCoupure([NOTE_PARTIE, NOTE_DELAI, NOTE_AGENTS].map(traduire).join(" "))
   if (r.etat === "absent") return <Bloc titre={TITRE_AGENTS_PARTIE} vide={sansMauvaiseCoupure(r.phrase)} />
   if (r.lignes.length === 0) return <Bloc titre={TITRE_AGENTS_PARTIE} vide={sansMauvaiseCoupure(SANS_AGENT_PARTIE)} />
   const lignes = r.lignes.map((l): LigneTableau => ({

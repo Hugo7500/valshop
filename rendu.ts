@@ -4,6 +4,7 @@ import {
   RuleLineForValueChart, ScrollView, ScrollViewReader, Section, SecureField, Spacer, Stepper, Text, Toggle, VStack, ZStack,
   useEffect as useEffectScripting, useRef as useRefScripting, useState as useStateScripting,
 } from "scripting"
+import { traductionActive, traduireElement } from "./langue"
 
 // Ticket 4.50 de epic-stats-tableau-de-bord (Stats dessiné par une vue web), phase A : le module intermédiaire des éléments
 // et des crochets. Chaque écran de Stats importe d'ici `createElement` et `Fragment` (le JSX y renvoie, lexicalement : la
@@ -54,6 +55,12 @@ function creer(type: unknown, props: Record<string, any> | null, ...enfants: unk
   if (actif === null) {
     appelsNatifs++
     return (createElement as any)(type, props, ...enfants)
+  }
+
+  if (traductionActive()) {
+    const tr = traduireElement(props, enfants)
+    props = tr.props as Record<string, any> | null
+    enfants = tr.enfants
   }
   const p: Record<string, any> = { ...(props || {}) }
   p.children = enfants.length === 0 ? undefined : enfants.length === 1 ? enfants[0] : enfants

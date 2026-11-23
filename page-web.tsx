@@ -1,3 +1,4 @@
+import { langue } from "./langue"
 import {
   EnvironmentValuesReader, Rectangle, VStack, WebView, ZStack, useEffect, useRef, useState,
   type ColorSchemeContrast, type DynamicTypeSize,
@@ -656,7 +657,7 @@ export function documentHote(html: string, jeton: number, taille: DynamicTypeSiz
   const bloc = blocHote(jeton, taille, fond)
   const { tete, document } = decouper(html)
   if (!document) {
-    return `<!doctype html><html lang="fr"><head>${bloc}${VIEWPORT}</head><body style="background-color:${fond}">${html}</body></html>`
+    return `<!doctype html><html lang="${langue()}"><head>${bloc}${VIEWPORT}</head><body style="background-color:${fond}">${html}</body></html>`
   }
   const viewport = /<meta\b[^>]*name=["']?viewport/i.test(tete) ? "" : VIEWPORT
   const head = /<head\b[^>]*>/i.exec(tete)

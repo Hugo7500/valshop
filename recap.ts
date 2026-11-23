@@ -24,6 +24,7 @@
 // phrases ; il ne vit que le temps de la feuille de partage (entrée 8).
 
 import type { Cote, CumulAgent, Partie, Saison } from "./reduction"
+import { traduire } from "./langue"
 import type { Acte, LigneRr, Rang } from "./historique"
 import type { Ressources, SectionArmes } from "./ressources"
 import {
@@ -2993,7 +2994,8 @@ function lignesDuDocument(sel: SelectionRecap, cochees: readonly CleCase[], date
   /** Le texte des lignes écrites : leurs caractères et un retour à la ligne entre deux. */
   let longueur = -1
   const ecrire = (...ls: string[]) => {
-    for (const l of ls) { lignes.push(l); longueur += l.length + 1 }
+    // En anglais, chaque ligne traduite entière, repère Markdown compris (anglais.ts) ; en français, telle quelle.
+    for (const l of ls) { const t = traduire(l); lignes.push(t); longueur += t.length + 1 }
   }
   ecrire(`# Récap Valorant · ${periodeEnClair(periodeDuRecap(sel))}`, "", `> ${CITATION}`)
   if (sel.avantPremiere && sel.couverte !== null) {

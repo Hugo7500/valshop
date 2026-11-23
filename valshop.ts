@@ -1,10 +1,11 @@
 import { Widget, Notification, fetch, type Cookie, type RequestInit } from "scripting"
 import {
-  cookiesRiot, deciderLecture, deciderPrix, lireVerrou, maintenanceProbable, nouveauVerrou, nouvelEtat, resumeErreurRiot, verrouDe,
+  cookiesRiot, deciderLecture, deciderPrix, lireVerrou, maintenanceProbable, nouveauVerrou, nouvelEtat, resumeErreurRiot, verrouActif, verrouDe,
   type BoutiqueLue, type IssueLecture, type OrigineVerrou,
 } from "./garde-fou"
 import { comparer, type Alerte } from "./alertes"
 import { contenuOffres } from "./widgets-lecture"
+import { traduireHorsVue } from "./langue"
 import { catalogueAReconstruire, construireCatalogue, lireListe, type Arme, type Skin, type Souhait } from "./souhaits"
 import {
   decrireAccessoire, decrireObjet, entreeValide, estNiveau, lireObjetsBundle, type EntreeAccessoire,
@@ -21,6 +22,10 @@ import {
 } from "./prix-retenus"
 import { TABLE_REFERENCE } from "./prix-reference"
 import { lireOrigines } from "./origines"
+import {
+  GENRES_COLLECTION, TYPES_COLLECTION, ajouterJour, contenuCollection, contenuHistoriqueBoutique, ligneJournalCollection, lireEntitlements,
+  lireHistoriqueBoutique, type GenreCollection,
+} from "./possessions"
 import { DELAI_SOLDE_MS, contenuSolde, deciderSolde, ligneJournalSolde, lireSolde, lireSoldes, type IssueSolde } from "./solde"
 import {
   BORNE_IMAGE, BORNE_JSON, BORNE_RIOT, JOURNAL_ENORME, JOURNAL_MAX, estUuid, imageAdmise, jsonBorne, journalTourne, shardDe, tailleAdmise, tailleAnnoncee, texteBorne,
@@ -79,6 +84,16 @@ const SOLDE_FILE = DIR + "/solde.json"
 /** Lot 2 des widgets : le skin et l'arme de chaque offre du jour, pour le widget Souhaits (widgets-lecture.ts, contenuOffres). */
 const SOUHAITS_WIDGET_FILE = DIR + "/widget-souhaits.json"
 
+
+
+
+const COLLECTION_FILE = DIR + "/collection.json"
+
+
+
+
+const HISTORIQUE_BOUTIQUE_FILE = DIR + "/historique-boutique.json"
+
 /**
  * Ticket 8.9 : la table de référence du paquet (prix-reference.ts, module de données importé : rien à lire sur le disque, ni
  * le dossier du script à viser), relue à chaque appel (le harnais la change) ; d'une autre forme : null.
@@ -126,6 +141,18 @@ function lireFichierVerrou(): string | null {
 }
 
 /** Cette exécution tient-elle encore la lecture qui a posé ce verrou ? (règle (3) de lireVerrou) */
+/**
+ * Une lecture de la boutique est-elle en cours, pour qui n'en tient aucune (les Réglages, avant un changement de compte ou
+ * une déconnexion, que la Boutique interdit pendant sa lecture) ? Verrou illisible : non.
+ */
+export function lectureEnCours(): boolean {
+  try {
+    return verrouActif(lireFichierVerrou(), Date.now())
+  } catch {
+    return false
+  }
+}
+
 function tenuIci(contenu: string | null): boolean {
   for (const j of jetons) if (!j.perdu && verrouDe(contenu, EXECUTION, j.depuis)) return true
   return false
@@ -971,6 +998,77 @@ async function fetchShop(tokens: Tokens, j: Jeton) {
   return { shop: await jsonBorne(res, BORNE_RIOT), region: region as string, shard, version, puuid, entetes: entetesRiot(tokens, entitlements, version) }
 }
 
+/** Délai de chaque requête de la collection, en secondes : elles viennent après tout le reste de la lecture. */
+const DELAI_COLLECTION_S = 10
+
+
+
+
+
+
+
+async function rangerCollection(shard: string, puuid: string, entetes: Record<string, string>, j: Jeton): Promise<boolean> {
+  try {
+    const genres: Partial<Record<GenreCollection, string[]>> = {}
+    const refus: GenreCollection[] = []
+    for (const g of GENRES_COLLECTION) {
+      if (!(await encore(j))) return false
+      const type = TYPES_COLLECTION[g]
+      // Vrai dès que Riot a répondu à cette requête (une réponse, même en erreur) ; faux : réseau perdu, délai passé ou verrou perdu.
+      let reponse = false
+      try {
+        const res = await requete(j, `https://pd.${shard}.a.pvp.net/store/v1/entitlements/${puuid}/${type}`, {
+          headers: entetes, timeout: DELAI_COLLECTION_S, handleRedirect: async () => null,
+        })
+        reponse = true
+        if (!res.ok) throw await echecRiot("entitlements " + g, res)
+        let corps: unknown
+        try {
+          corps = JSON.parse(await texteBorne(res, BORNE_RIOT))
+        } catch {
+          throw new Error("réponse illisible")
+        }
+        const lu = lireEntitlements(corps, type)
+        if ("refus" in lu) throw new Error(lu.refus)
+        genres[g] = lu.ids
+      } catch (e) {
+        refus.push(g)
+        await note(`Collection : ${g} non lu (${raisonSolde(e, [puuid])}).`)
+        // Sans réseau, les genres suivants échoueraient de même : on s'arrête là. (`reseauIndisponible` ne dit que la dernière
+        // reconnexion, réussie ici : c'est l'absence de réponse à cette requête qui le dit.)
+        if (!reponse) break
+      }
+    }
+    if (Object.keys(genres).length === 0) return false
+    if (!(await encore(j))) return false
+    ecrireSur(COLLECTION_FILE, contenuCollection({ compte: puuid, lueA: new Date(Date.now()).toISOString(), genres }))
+    await note(ligneJournalCollection(genres, refus))
+    return true
+  } catch (e) {
+    try { await note(`Collection non gardée (${raisonSolde(e, [puuid])}).`) } catch { /* journal indisponible : rien */ }
+    return false
+  }
+}
+
+
+
+
+
+async function garderJourBoutique(puuid: string, data: { daily?: { resetAt?: unknown; items?: unknown } }) {
+  try {
+    const items = Array.isArray(data.daily?.items) ? (data.daily!.items as { id?: unknown }[]) : []
+    let avant: string | null = null
+    try {
+      if (FileManager.existsSync(HISTORIQUE_BOUTIQUE_FILE)) avant = FileManager.readAsStringSync(HISTORIQUE_BOUTIQUE_FILE)
+    } catch { /* illisible : repart de rien, comme lireHistoriqueBoutique */ }
+    const h = lireHistoriqueBoutique(avant)
+    const apres = ajouterJour(h, puuid, data.daily?.resetAt, items.map((i) => i?.id))
+    if (apres !== h) ecrireSur(HISTORIQUE_BOUTIQUE_FILE, contenuHistoriqueBoutique(apres))
+  } catch (e) {
+    try { await note("historique de la boutique non gardé (" + masquerErreur(e, [puuid]) + ").") } catch { /* rien */ }
+  }
+}
+
 /** Délai de la requête du portefeuille, en secondes : la dernière de la lecture, elle ne doit pas en retenir longtemps la fin. */
 const DELAI_SOLDE_S = 10
 
@@ -1072,7 +1170,10 @@ async function relireSolde(cache: BoutiqueLue | null, hasCookies: boolean, j: Je
     }
     const entitlements = await lireEntitlement(tokens, j)
     const puuid = await getPuuid(tokens.access, j)
-    const relu = await rangerSolde(shard, puuid, entetesRiot(tokens, entitlements, version), boutique, j)
+    const entetes = entetesRiot(tokens, entitlements, version)
+    const relu = await rangerSolde(shard, puuid, entetes, boutique, j)
+
+    if (await encore(j)) await rangerCollection(shard, puuid, entetes, j)
     return relu ? { genre: "relu" } : { genre: "non-relu", reseau: false }
   } catch (e) {
     try { await note(`Solde non relu (${raisonSolde(e)}).`) } catch { /* journal indisponible : rien */ }
@@ -1087,6 +1188,14 @@ async function relireSolde(cache: BoutiqueLue | null, hasCookies: boolean, j: Je
  */
 async function effacerSolde() {
   dernierEssaiSolde = null
+
+  for (const chemin of [COLLECTION_FILE, COLLECTION_FILE + ".tmp"]) {
+    try {
+      if (FileManager.existsSync(chemin)) FileManager.removeSync(chemin)
+    } catch (e) {
+      await note("collection.json non effacée (" + masquerErreur(e) + ") : elle ne s'affichera pas pour un autre compte.")
+    }
+  }
   for (const chemin of [SOLDE_FILE, SOLDE_FILE + ".tmp"]) {
     try {
       if (FileManager.existsSync(chemin)) FileManager.removeSync(chemin)
@@ -1464,7 +1573,7 @@ function heure(iso: unknown): string {
  * urgente. Un envoi refusé ou en erreur se journalise et n'arrête rien.
  */
 async function notifier(alerte: Alerte) {
-  const options: Parameters<typeof Notification.schedule>[0] = { title: "ValShop", body: alerte.corps }
+  const options: Parameters<typeof Notification.schedule>[0] = { title: "ValShop", body: await traduireHorsVue(alerte.corps) }
   if (alerte.urgent) options.interruptionLevel = "timeSensitive"
   let sort = ""
   try {
@@ -1614,7 +1723,7 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
       if (!reseau && !bouton) {
         Notification.schedule({
           title: "ValShop",
-          body: "Ta session Riot a expiré. Ouvre l'app pour te reconnecter.",
+          body: await traduireHorsVue("Ta session Riot a expiré. Ouvre l'app pour te reconnecter."),
           interruptionLevel: "timeSensitive",
         })
       }
@@ -1658,6 +1767,9 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
       if (!(await encore(j))) return arret()
       await garderIdentite(puuid, region)
 
+      if (!(await encore(j))) return arret()
+      await garderJourBoutique(puuid, data)
+
       // Lot 2 des widgets : le skin et l'arme de chaque offre du jour, pour le widget Souhaits (widget-souhaits.json), avant le
       // rechargement des widgets ; un échec n'y change rien (le widget Souhaits montre alors la boutique).
       if (!(await encore(j))) return arret()
@@ -1694,6 +1806,8 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
       // d'un ↻). Un échec n'y change rien ; verrou repris ou budget passé entre-temps : rien de demandé, la lecture reste « lue ».
       if (await encore(j)) await rangerSolde(shard, puuid, entetes, data.updatedAt, j)
 
+      if (par !== "arriere-plan" && (await encore(j))) await rangerCollection(shard, puuid, entetes, j)
+
       const names = data.daily.items.map((i: any) => i.name).join(", ")
 
       await note(`✅ Boutique écrite (${region}/${shard}) en ${Date.now() - started} ms.`)
@@ -1711,9 +1825,9 @@ async function lire(mode: ModeLecture): Promise<Lecture> {
       if (!bouton) {
         Notification.schedule({
           title: "ValShop",
-          body: maintenance
+          body: await traduireHorsVue(maintenance
             ? "Boutique indisponible chez Riot, maintenance probable. Réessaie plus tard."
-            : "La mise à jour a échoué. Détail dans le journal.",
+            : "La mise à jour a échoué. Détail dans le journal."),
           interruptionLevel: "timeSensitive",
         })
       }
@@ -1918,7 +2032,7 @@ export async function changerDeCompte(): Promise<string> {
     // Seul passe-droit au garde-fou : sans boutique en cache, la lecture qui suit
     // interroge Riot. etat.json, s'il existait, parlait de l'ancien compte ; le compte des
     // stats aussi : la lecture qui suit garde le nouveau (ses données restent, par PUUID).
-    await note("changement de compte : effacement de shop.json, solde.json, etat.json et du compte des stats de l'ancien compte.")
+    await note("changement de compte : effacement de shop.json, solde.json, collection.json, etat.json et du compte des stats de l'ancien compte.")
     try {
       if (FileManager.existsSync(SHOP_FILE)) FileManager.removeSync(SHOP_FILE)
     } catch (e) {
@@ -1963,7 +2077,7 @@ export async function seDeconnecter(): Promise<boolean> {
       await note("déconnexion : session Riot non retirée du trousseau, rien d'autre ne change.")
       Notification.schedule({
         title: "ValShop",
-        body: "La déconnexion a échoué. Détail dans le journal.",
+        body: await traduireHorsVue("La déconnexion a échoué. Détail dans le journal."),
         interruptionLevel: "timeSensitive",
       })
       return false
@@ -1975,7 +2089,7 @@ export async function seDeconnecter(): Promise<boolean> {
       ? `déconnexion : fenêtre web sans cookie Riot (${r.retires} retirés).`
       : `⚠️ déconnexion : ${r.retires} cookies Riot retirés de la fenêtre web sur ${r.trouves} (${r.echecs.join(", ")}).`)
 
-    await note("déconnexion : effacement de shop.json, solde.json, etat.json et du compte des stats.")
+    await note("déconnexion : effacement de shop.json, solde.json, collection.json, etat.json et du compte des stats.")
     try {
       if (FileManager.existsSync(SHOP_FILE)) FileManager.removeSync(SHOP_FILE)
     } catch (e) {
@@ -2009,4 +2123,4 @@ export function iconeEnCache(id: string, url: string | null): Promise<string | n
 // cookies du trousseau, lus sans requête pour en tirer le PUUID, shop.json, pour sa région, et catalog.json, pour
 // les rôles des agents (section `agents`, que `catalog()` garde) ; pour l'onglet Boutique, solde.json (entrée 17 de
 // epic-boutique-visuels).
-export { tailJournal, note, loadCookies, SHOP_FILE, ETAT_FILE, CATALOG, WISHLIST_FILE, PRIX_FILE, PRIX_VUS_FILE, ETAT_PRIX_FILE, ACCESSOIRES_FILE, ORIGINES_FILE, SOLDE_FILE }
+export { tailJournal, note, loadCookies, COLLECTION_FILE, HISTORIQUE_BOUTIQUE_FILE, SHOP_FILE, ETAT_FILE, CATALOG, WISHLIST_FILE, PRIX_FILE, PRIX_VUS_FILE, ETAT_PRIX_FILE, ACCESSOIRES_FILE, ORIGINES_FILE, SOLDE_FILE }

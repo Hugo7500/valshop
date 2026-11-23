@@ -1,3 +1,4 @@
+import { traduire } from "./langue"
 import {
   EnvironmentValuesReader, Rectangle, Text, VStack,
   type DynamicTypeSize, type VirtualNode,
@@ -106,7 +107,7 @@ export const LEGENDE_ZONES: readonly ItemLegende[] = [
 
 
 export function insecable(texte: string): string {
-  return texte.replace(/ /g, NBSP)
+  return traduire(texte).replace(/ /g, NBSP)
 }
 
 
@@ -188,7 +189,7 @@ export function barresZones(b: BlocZones): BarreEmpilee[] {
 
 
 export function voixZones(b: BlocZones): string {
-  return b.ecart === null ? b.phrase : `${b.phrase} ${ECART_TETE}, ${ditEnClair(b.ecart)}.`
+  return b.ecart === null ? b.phrase : `${traduire(b.phrase)} ${traduire(`${ECART_TETE}, ${ditEnClair(b.ecart)}.`)}`
 }
 
 
@@ -220,7 +221,7 @@ export function noteDistance(lignes: readonly DistanceArme[]): string | null {
   if (lignes.some((l) => l.moyenne === null)) morceaux.push(NOTE_TIRET_DISTANCE)
   const precises = lignes.filter((l) => l.precision !== null).map((l) => `${l.nom} ${l.precision}`)
   if (precises.length > 0) morceaux.push(`Un kill sans position sort du calcul${NBSP}: ${precises.join(", ")}.`)
-  return morceaux.length === 0 ? null : morceaux.join(" ")
+  return morceaux.length === 0 ? null : morceaux.map(traduire).join(" ")
 }
 
 
@@ -310,8 +311,8 @@ function PartieZones({ b, c, vide }: { b: BlocZones; c: Palette; vide: string })
             foregroundColor: c.texteDoux,
             monospacedDigit: true,
             content: [
-              `${ECART_TETE}${NBSP}: `,
-              { content: b.ecart, font: TYPO.petitFort.font, fontWeight: TYPO.petitFort.fontWeight, foregroundColor: couleurEvaluation(c, b.evaluation), monospacedDigit: true },
+              traduire(`${ECART_TETE}${NBSP}: `),
+              { content: traduire(b.ecart), font: TYPO.petitFort.font, fontWeight: TYPO.petitFort.fontWeight, foregroundColor: couleurEvaluation(c, b.evaluation), monospacedDigit: true },
             ],
           }}
         />
@@ -426,7 +427,7 @@ export function noteBlocDuels(d: DuelsSelonLaDistance, a: ArmesDuBloc): string |
       : a.ramassee !== null && a.fusil !== null ? noteArmeEtFusil(a.ramassee, a.fusil) : null
     if (armes !== null) morceaux.push(armes)
   }
-  return morceaux.length === 0 ? null : morceaux.join(" ")
+  return morceaux.length === 0 ? null : morceaux.map(traduire).join(" ")
 }
 
 /**

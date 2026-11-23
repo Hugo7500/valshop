@@ -15,6 +15,7 @@
 
 
 
+import { traduire } from "./langue"
 import type { AgentAdverse, Partie, Touches } from "./reduction"
 import { LIBELLES_ZONES, MOYENNE, NOMS_AGENTS, POURCENTAGE, TIRET, effectifEnClair, nombreEnClair, valeurEnClair, type Selection } from "./metriques"
 import {
@@ -309,7 +310,7 @@ export function noteDesAgents(r: AgentsDeLaPeriode): string {
     if (r.lignes.some((l) => l.degatsParManche.valeur === null || (l.totalTouches > 0 && l.tete.valeur === null))) morceaux.push(NOTE_TIRET)
   }
   morceaux.push(NOTE_DELAI, NOTE_AGENTS)
-  return morceaux.join(" ")
+  return morceaux.map(traduire).join(" ")
 }
 
 // ─────────────────────────── Détail d'une partie ───────────────────────────

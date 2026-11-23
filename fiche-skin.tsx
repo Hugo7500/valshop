@@ -8,6 +8,8 @@ import { libelleVariante, lireFicheSkin, separerNom, type NiveauDeSkin } from ".
 import { catalogueAReconstruire, type Variante } from "./souhaits"
 import { CATALOG } from "./valshop"
 import { iconeLisible, imageAdmise, videoAdmise } from "./securite"
+import { apparitions, niveauxDuSkin, phraseApparitions, skinPossede } from "./possessions"
+import { possessionsLues } from "./possessions-ecran"
 
 
 
@@ -427,6 +429,16 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
   const tourne = useRef(false)
   const [video, setVideo] = useState<VideoOuverte | null>(null)
 
+  const [chezToi] = useState<{ aToi: boolean; phrase: string | null }>(() => {
+    try {
+      const p = possessionsLues()
+      const niveaux = niveauxDuSkin(catalogue, id)
+      return { aToi: skinPossede(p.possedes, niveaux) === true, phrase: phraseApparitions(apparitions(p.historique, p.compte, niveaux), Date.now()) }
+    } catch {
+      return { aToi: false, phrase: null }
+    }
+  })
+
   /** Un réglage de la session audio, à la suite des précédents, sans attendre ; un refus se dit en console. */
   const regler = (quoi: string, reglage: () => Promise<void>) => {
     session.current = session.current.then(reglage).catch((e) => console.log(`fiche : session audio refusée, ${quoi} (${e})`))
@@ -568,6 +580,12 @@ export function FicheSkin({ id, prix, offre, ouverture, catalogue: donne, infos 
           : infos && infos.sansPrix && infos.origine ? <LabeledContent title="Origine" value={infos.origine} />
           : <LabeledContent title="Prix" value={infos ? infos.prix : prixDit(prix)} />}
       </Section>
+      {chezToi.aToi || chezToi.phrase !== null ? (
+        <Section title="Chez toi" listRowBackground={<Rectangle fill={SURFACE} />}>
+          {chezToi.aToi ? <LabeledContent title="Ta collection" value="Déjà à toi" /> : null}
+          {chezToi.phrase !== null ? <Text font="subheadline" foregroundStyle="secondaryLabel">{chezToi.phrase}</Text> : null}
+        </Section>
+      ) : null}
       {infos ? (
         <Section listRowBackground={<Rectangle fill={SURFACE} />}>
           {infos.source ? <LabeledContent title="Source du prix" value={infos.source} /> : null}

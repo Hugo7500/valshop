@@ -3,6 +3,8 @@ import {
   Spacer, Text, TimerIntervalLabel, VStack, type Color, type LiveActivityUIBuilder,
 } from "scripting"
 import type { IleSouhait } from "./widgets-ile"
+import { installerTraduction, langueDe } from "./langue"
+import { preferencesGardees } from "./preferences"
 
 
 
@@ -81,5 +83,11 @@ const dessiner: LiveActivityUIBuilder<IleSouhait> = (e) => (
     </LiveActivityUIExpandedBottom>
   </LiveActivityUI>
 )
+
+
+try {
+  const l = langueDe(preferencesGardees().langue, Device.systemLanguageCode)
+  if (l === "en") installerTraduction(l).catch(() => { /* français */ })
+} catch { /* français */ }
 
 export const IleValShop = LiveActivity.register("ValShopSouhait", dessiner)

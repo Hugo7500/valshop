@@ -1,3 +1,4 @@
+import { langue } from "./langue"
 import {
   Button, EmptyView, EnvironmentValuesReader, HStack, LazyVStack, List, Navigation, NavigationStack, ProgressView, Rectangle, RoundedRectangle,
   Script, ScrollView, ScrollViewReader, Section, Text, VStack, ZStack, fetch, type ColorSchemeContrast, type DynamicTypeSize, type ScrollViewProxy,
@@ -21,7 +22,7 @@ import {
   FinDuRendu, calculMesure, debutDeRendu, direSondeRendu, finirMesure, mesurerAppui, oublierAppui, useLigneDeMesure,
 } from "./design"
 import { Boutique, SansCache, chargerAvecEmpreinte, chargerListe, relireSiChangee, sessionGardee, type ChoixVue, type EmpreinteBoutique, type Shop } from "./vue"
-import { FeuilleReglages, useNouvelleVersion, useHistoriqueAvant } from "./reglages"
+import { FeuilleReglages, inscrireFermetureApp, useNouvelleVersion, useHistoriqueAvant } from "./reglages"
 import { echeanceHistoriqueAvant, historiqueAvantMontre, reessaiDe, vueHistoriqueAvant } from "./historique-avant"
 import { EcranConnexion, InviteConnexion } from "./connexion"
 import { PremierLancement } from "./premier"
@@ -1394,7 +1395,7 @@ export function ligneErreurDeCalcul(erreur: unknown): string {
 
 /** Le document de la page : feuille de base et classes du traducteur, corps, script de dessin (traduction-web.ts). */
 function documentWeb(corps: string, css: string): string {
-  return '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
+  return '<!doctype html><html lang="' + langue() + '"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
     `<style>${CSS_BASE}${STYLE_MENU}${css}</style></head><body>${corps}<script>${SCRIPT_PAGE}</script><script>${SCRIPT_MENU}</script></body></html>`
 }
@@ -1632,6 +1633,8 @@ function App({ shop: shopOuvert, empreinte, souhaits, expiree, deconnecte = fals
   statut?: Promise<string | null> | null
 }) {
   const fermer: (choix?: ChoixVue) => void = Navigation.useDismiss()
+
+  useEffect(() => inscrireFermetureApp((choix) => fermer(choix)), [])
   // Ticket 4.52 : le bandeau de l'état des serveurs de Riot, quand la lecture lancée à l'ouverture (presenterApp) en donne un.
   const [bandeau, setBandeau] = useState<string | null>(null)
   useEffect(() => {

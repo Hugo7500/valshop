@@ -29,6 +29,7 @@
 
 
 
+import { traduire } from "./langue"
 import type { Cote, Kill, Manche, Partie } from "./reduction"
 import type { SectionCartes } from "./ressources"
 import { POURCENTAGE, RATIO, TIRET, carteDuCatalogue, cleCarte, effectifEnClair, fileAdmise, nombreEnClair, zoneDe, type Selection } from "./metriques"
@@ -256,7 +257,8 @@ type FaitsDeManche = { kills: number; morts: number; killsApres: number; premier
 function finDeNote(parts: string[], manchesSansCote: number, effectif: string): string {
   if (manchesSansCote > 0) parts.push(`${compte(manchesSansCote, "manche")} sans côté, hors du calcul.`)
   parts.push(effectif)
-  return parts.join(" ")
+  // En anglais, chaque phrase traduite seule (anglais.ts) ; en français, telle quelle.
+  return parts.map(traduire).join(" ")
 }
 
 /**
@@ -486,5 +488,5 @@ function apresPoseDe(
   if (sans.length > 0) parts.push(`Sans elle, hors du calcul : ${sans.join(", ")}.`)
   if (d.sansIssue > 0) parts.push(`${compte(d.sansIssue, "manche")} avec une pose, sans issue connue, hors du calcul.`)
   parts.push(effectif)
-  return { poses: d.poses, avecDistance, sansMoment: d.sansMoment, sansSpike: d.sansSpike, mortAvant: d.mortAvant, sansPosition: d.sansPosition, sansIssue: d.sansIssue, tranches, vide, note: parts.join(" ") }
+  return { poses: d.poses, avecDistance, sansMoment: d.sansMoment, sansSpike: d.sansSpike, mortAvant: d.mortAvant, sansPosition: d.sansPosition, sansIssue: d.sansIssue, tranches, vide, note: parts.map(traduire).join(" ") }
 }

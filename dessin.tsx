@@ -14,6 +14,7 @@ import {
 } from "./metriques"
 import type { Cote } from "./reduction"
 import type { SectionPaliers } from "./ressources"
+import { langue, traduire } from "./langue"
 
 // Module de dessin de l'onglet Stats (entrées 13, 14, 15 et 37 de epic-stats-tableau-de-bord ; DESIGN.md, Shapes et
 // Components ; EXPERIENCE.md, Component Patterns et points 3 à 7 et 13 de « À vérifier au spike ») : Bloc à coin coupé,
@@ -148,7 +149,8 @@ const LETTRES_EXPOSANT: Readonly<Record<string, string>> = { "\u1d49": "e", "\u0
 
 
 export function titreAffiche(titre: string): string {
-  return titre.replace(/[\u1d49\u02b3\u02e2]/g, (lettre: string) => LETTRES_EXPOSANT[lettre])
+  // Traduit d'abord (anglais.ts connaît les ordinaux en exposant) ; en français, tel quel.
+  return traduire(titre).replace(/[\u1d49\u02b3\u02e2]/g, (lettre: string) => LETTRES_EXPOSANT[lettre])
 }
 
 /**
@@ -566,7 +568,7 @@ export function JaugeRR({ rr, valeur, derniere, voix }: {
                       content: derniere.texte, font: TYPO.petitFort.font, fontWeight: TYPO.petitFort.fontWeight,
                       foregroundColor: couleurIssue(c, derniere.evaluation), monospacedDigit: true,
                     },
-                    " à la dernière partie",
+                    traduire(" à la dernière partie"),
                   ]
                   : [valeur],
               }}
@@ -690,7 +692,7 @@ export function Radar({ axes, texte, phrase, ouvertures }: {
               voix={a.phrase}
             />
           )
-          return o === null ? barre : zoneDAppui({ cle: String(i), action: o.action, voix: `${a.phrase} ${o.dit}` }, barre)
+          return o === null ? barre : zoneDAppui({ cle: String(i), action: o.action, voix: `${traduire(a.phrase)} ${traduire(o.dit)}` }, barre)
         })}
       </VStack>
     )
@@ -736,7 +738,7 @@ export function Radar({ axes, texte, phrase, ouvertures }: {
                   <VStack key={i} position={{ x: k.x, y: k.y }}>
                     {o === null ? nom : zoneDAppui({
                       action: o.action,
-                      voix: `${a.phrase} ${o.dit}`,
+                      voix: `${traduire(a.phrase)} ${traduire(o.dit)}`,
                       cadre: { minWidth: k.largeur, maxWidth: k.largeur, minHeight: ESPACES.cible },
                     }, nom)}
                   </VStack>
@@ -2413,7 +2415,8 @@ const ESPACE_AVANT_PONCTUATION = / (?=[:;!?])/g
 
 
 export function sansMauvaiseCoupure(phrase: string): string {
-  return phrase.replace(BARRE_DANS_UN_MOT, (_tout: string, avant: string) => `${avant}/${GLUON}`).replace(ESPACE_AVANT_PONCTUATION, INSECABLE)
+  // Traduite avant les remplacements, qui changeraient sa forme (anglais.ts) ; en français, telle quelle.
+  return traduire(phrase).replace(BARRE_DANS_UN_MOT, (_tout: string, avant: string) => `${avant}/${GLUON}`).replace(ESPACE_AVANT_PONCTUATION, INSECABLE)
 }
 
 /**
@@ -2439,7 +2442,7 @@ export function Constat({ genre, phrase }: { genre: GenreConstat; phrase: string
             frame={{ maxWidth: "infinity", alignment: "leading" }}
             background={<RoundedRectangle cornerRadius={ARRONDIS.md} fill={melange(accent as string, c.surface as string, 0.16)} />}
             accessibilityElement
-            accessibilityLabel={`${etiquette} : ${phrase}`}
+            accessibilityLabel={`${traduire(etiquette)}${langue() === "en" ? ":" : " :"} ${phrase}`}
           >
             <Text {...policeCondensee(TYPO.etiquetteConstat, enCapitales(etiquette))} foregroundStyle={accent}>
               {etiquette}
