@@ -1,7 +1,6 @@
 {
-  "version": "1.2.1",
+  "version": "1.2.2",
   "notes": [
-    "En anglais, les noms des skins, armes, accessoires, rangs et capacités passent eux aussi en anglais (à la prochaine lecture de la boutique).",
-    "Ta liste de souhaits montre les noms à jour du jeu."
+    "Signaler un bug : dans les Réglages, groupe ValShop, un message prêt s'ouvre dans Mail."
   ]
 }

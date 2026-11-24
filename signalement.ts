@@ -10,7 +10,7 @@ import { traduire } from "./langue"
 
 
 
-export const ADRESSE_SIGNALEMENT = ""
+export const ADRESSE_SIGNALEMENT: string = "rubicon-safari-9g@icloud.com"
 
 /** Textes de la section. */
 export const TITRE_SIGNALEMENT = "Signaler un bug"
